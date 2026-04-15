@@ -83,11 +83,14 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw    = ImageDraw.Draw(overlay)
 
-    strip_y = height - total_h - 44
-    draw.rectangle([0, strip_y, width, height], fill=(0, 0, 0, 170))
-    draw.line([0, strip_y, width, strip_y], fill=(255, 220, 100, 140), width=2)
+    # Place quote at the TOP so it is not covered by YouTube channel name / controls
+    strip_top    = 0
+    strip_bottom = total_h + pad_v * 2
+    draw.rectangle([0, strip_top, width, strip_bottom], fill=(0, 0, 0, 160))
+    # Decorative gold line at the bottom edge of the strip
+    draw.line([0, strip_bottom, width, strip_bottom], fill=(255, 220, 100, 140), width=2)
 
-    y = strip_y + pad_v
+    y = strip_top + pad_v
     for line in quote_lines:
         try:
             tw = draw.textbbox((0, 0), line, font=font)[2]

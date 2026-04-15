@@ -88,24 +88,47 @@ def fetch_trending_music(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+# Ordering strategies to rotate through for variety
+_ORDER_OPTIONS = [
+    "popularity_total",
+    "popularity_month",
+    "popularity_week",
+    "releasedate",
+]
+
+
 def _find_track(client_id: str, tags: str, min_duration: float):
     """Query Jamendo and return (download_url, track_name, artist_name)."""
+    # Use a random order strategy and a random offset so every run gets a
+    # different pool of tracks instead of always the same top-10.
+    order  = random.choice(_ORDER_OPTIONS)
+    offset = random.randint(0, 150)
+
     params = {
-        "client_id":    client_id,
-        "format":       "json",
-        "limit":        50,
-        "order":        "popularity_total",
-        "tags":         tags,
+        "client_id":     client_id,
+        "format":        "json",
+        "limit":         50,
+        "offset":        offset,
+        "order":         order,
+        "tags":          tags,
         "audiodlformat": "mp32",
-        "minlength":    int(max(min_duration, 30)),   # Jamendo minimum: 30 s
+        "minlength":     int(max(min_duration, 30)),   # Jamendo minimum: 30 s
     }
     resp = requests.get(JAMENDO_TRACKS_URL, params=params, timeout=15)
     resp.raise_for_status()
     tracks = resp.json().get("results", [])
 
     if not tracks:
-        # Broader fallback — try default tags
-        params["tags"] = _DEFAULT_TAGS
+        # Retry with offset=0 in case the paged offset was beyond the result set
+        params["offset"] = 0
+        resp = requests.get(JAMENDO_TRACKS_URL, params=params, timeout=15)
+        resp.raise_for_status()
+        tracks = resp.json().get("results", [])
+
+    if not tracks:
+        # Broader fallback — try default tags with no offset
+        params["tags"]   = _DEFAULT_TAGS
+        params["offset"] = random.randint(0, 100)
         resp = requests.get(JAMENDO_TRACKS_URL, params=params, timeout=15)
         resp.raise_for_status()
         tracks = resp.json().get("results", [])
@@ -113,11 +136,25 @@ def _find_track(client_id: str, tags: str, min_duration: float):
     if not tracks:
         raise ValueError("No tracks found on Jamendo")
 
-    # Pick randomly from the top-10 most popular tracks for variety
-    top_tracks = tracks[:10]
-    track = random.choice(top_tracks)
+    # Shuffle and pick a track that has a valid download URL
+    random.shuffle(tracks)
+    track = None
+    for candidate in tracks:
+        url = candidate.get("audiodownload", "").strip()
+        # Some tracks don't have mp32 download enabled; fall back to the
+        # streaming audio field which is always present
+        if not url or not url.startswith("http"):
+            url = candidate.get("audio", "").strip()
+        if url and url.startswith("http"):
+            candidate["_resolved_url"] = url
+            track = candidate
+            break
+
+    if track is None:
+        raise ValueError("No tracks with a valid download URL found on Jamendo")
+
     return (
-        track["audiodownload"],
+        track["_resolved_url"],
         track.get("name", "unknown"),
         track.get("artist_name", "unknown"),
     )

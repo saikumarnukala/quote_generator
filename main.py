@@ -61,10 +61,30 @@ LANGUAGE_NAMES = {
 
 
 def _auto_topic() -> str:
-    """Pick a topic that rotates 3 times per day automatically."""
-    slot = datetime.now().hour // 8          # 0 (midnight), 1 (8am), 2 (4pm)
-    idx  = (datetime.now().timetuple().tm_yday * 3 + slot) % len(TOPICS)
-    return TOPICS[idx]
+    """Pick a unique random topic each run, avoiding the last used topic."""
+    last_topic_file = os.path.join(OUTPUT_DIR, ".last_topic")
+    last_topic = None
+    if os.path.exists(last_topic_file):
+        try:
+            with open(last_topic_file, "r", encoding="utf-8") as f:
+                last_topic = f.read().strip()
+        except Exception:
+            pass
+
+    available = [t for t in TOPICS if t != last_topic]
+    if not available:
+        available = TOPICS
+
+    topic = random.choice(available)
+
+    try:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        with open(last_topic_file, "w", encoding="utf-8") as f:
+            f.write(topic)
+    except Exception:
+        pass
+
+    return topic
 
 
 def _setup_dirs() -> None:
