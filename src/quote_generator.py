@@ -85,3 +85,98 @@ Rules:
         raw = match.group(0)
 
     return json.loads(raw)
+
+
+def generate_video_metadata(
+    topic: str,
+    video_title: str,
+    scenes: list,
+    api_key: str,
+    language: str = "en",
+) -> dict:
+    """
+    Generate a catchy YouTube title, SEO-rich description, and targeted
+    hashtags for the video using Groq.
+
+    Returns:
+        {
+          "yt_title":    str,   # punchy YouTube title (≤90 chars, includes #Shorts)
+          "description": str,   # multi-paragraph YouTube description
+          "hashtags":    list,  # list of 25–30 hashtag strings (with #)
+          "tags":        list,  # plain tag words for YouTube API
+        }
+    """
+    client = Groq(api_key=api_key)
+
+    # Build a brief summary of the quotes for context
+    quote_lines = "\n".join(
+        f'- "{s.get("quote", "")}" — {s.get("author", "")}'
+        for s in scenes[:5]
+    )
+
+    prompt = f"""You are a YouTube SEO expert and content strategist specialising in
+peaceful, motivational and mindfulness content. Create metadata for this video:
+
+Topic: {topic}
+Video title from AI: {video_title}
+Sample quotes:
+{quote_lines}
+
+Return ONLY valid JSON — no markdown, no extra text:
+{{
+  "yt_title": "A punchy YouTube title under 90 characters. Must include #Shorts. Make it emotionally compelling and searchable.",
+  "description": "A 3-paragraph YouTube video description. Paragraph 1: Hook — 1-2 compelling sentences about the video theme. Paragraph 2: What viewers will feel/gain. Paragraph 3: Call to action (subscribe, like, comment their favourite quote). End with the full hashtag block on its own line.",
+  "hashtags": ["list", "of", "25", "to", "30", "hashtags", "each", "with", "#", "include", "niche", "and", "broad", "tags"],
+  "tags": ["plain", "tag", "words", "for", "YouTube", "API", "15", "to", "20", "items"]
+}}
+
+Rules:
+- yt_title: emotional, short, has #Shorts, no clickbait, max 90 chars
+- description: warm tone, 3 clear paragraphs, ends with hashtags block
+- hashtags: mix of broad (#meditation #quotes #shorts) and niche (#innerpeace #calmvibes) — 25–30 items
+- tags: plain English phrases, no #, 15–20 items, great for YouTube SEO"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=1500,
+    )
+
+    raw = response.choices[0].message.content.strip()
+    raw = re.sub(r"^```[a-z]*\n?", "", raw, flags=re.MULTILINE)
+    raw = re.sub(r"\n?```$", "", raw, flags=re.MULTILINE)
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if match:
+        raw = match.group(0)
+
+    try:
+        meta = json.loads(raw)
+    except Exception:
+        # Fallback to safe defaults if parsing fails
+        meta = {}
+
+    # Ensure all keys exist with safe fallbacks
+    if not meta.get("yt_title"):
+        meta["yt_title"] = f"{video_title} #Shorts"[:90]
+
+    if not meta.get("description"):
+        meta["description"] = (
+            f"{topic.capitalize()} — a peaceful video to calm your mind and uplift your spirit.\n\n"
+            "Take a breath, slow down, and let these words guide you.\n\n"
+            "Like & Subscribe for daily peaceful quotes. Drop your favourite quote in the comments!"
+        )
+
+    if not meta.get("hashtags"):
+        meta["hashtags"] = [
+            "#shorts", "#quotes", "#peaceful", "#mindfulness", "#motivation",
+            "#nature", "#meditation", "#innerpeace", "#calmvibes", "#dailyquotes",
+        ]
+
+    if not meta.get("tags"):
+        meta["tags"] = [
+            "shorts", "quotes", "peaceful", "mindfulness", "motivation",
+            "nature", "meditation", "inner peace", "calm", "daily quotes",
+        ]
+
+    return meta

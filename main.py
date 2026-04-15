@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, OUTPUT_DIR, TEMP_DIR
-from src.quote_generator import generate_quotes
+from src.quote_generator import generate_quotes, generate_video_metadata
 from src.video_fetcher import fetch_nature_video
 from src.ambient_generator import generate_ambient
 from src.music_fetcher import fetch_trending_music
@@ -93,8 +93,17 @@ def _setup_dirs() -> None:
 
 
 def _cleanup_temp() -> None:
+    """Remove temp files, ignoring files still locked by MoviePy on Windows."""
     if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
+        for fname in os.listdir(TEMP_DIR):
+            fpath = os.path.join(TEMP_DIR, fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.unlink(fpath)
+                elif os.path.isdir(fpath):
+                    shutil.rmtree(fpath, ignore_errors=True)
+            except Exception:
+                pass  # File still locked by MoviePy — leave it, harmless
     os.makedirs(TEMP_DIR, exist_ok=True)
 
 
@@ -150,6 +159,14 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     with open(os.path.join(TEMP_DIR, "quotes.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
+    print("        Generating video metadata (title / description / hashtags)...")
+    meta = generate_video_metadata(topic, title, scenes, GROQ_API_KEY, language=language)
+    yt_title   = meta["yt_title"]
+    yt_desc    = meta["description"]
+    yt_tags    = meta["tags"]
+    hashtags   = " ".join(meta["hashtags"])
+    print(f"        YT Title: {yt_title}")
+
     # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
     print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")
     video_paths = []
@@ -195,12 +212,16 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
 
     # ── Optional: Upload to YouTube & Instagram ────────────────────────
     # Uploads are silently skipped if the required secrets are not set.
-    hashtags = "#peaceful #quotes #nature #mindfulness #motivation #shorts"
-    caption  = f"{title}\n\n{hashtags}"
+    caption = f"{yt_title}\n\n{yt_desc}\n\n{hashtags}"
 
     print("[ Upload ] Posting to social media...")
     try:
-        yt_url = upload_to_youtube(output, title=title, description=topic)
+        yt_url = upload_to_youtube(
+            output,
+            title=yt_title,
+            description=yt_desc,
+            tags=yt_tags,
+        )
     except Exception as e:
         print(f"  YouTube upload failed: {e}")
         yt_url = None
