@@ -28,3 +28,6 @@ temp/
 *.swp
 .DS_Store
 Thumbs.db
+
+client_secret*.json
+*.json
