@@ -20,10 +20,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import GROQ_API_KEY, PEXELS_API_KEY, OUTPUT_DIR, TEMP_DIR
+from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, OUTPUT_DIR, TEMP_DIR
 from src.quote_generator import generate_quotes
 from src.video_fetcher import fetch_nature_video
 from src.ambient_generator import generate_ambient
+from src.music_fetcher import fetch_trending_music
 from src.video_builder import build_video
 from src.youtube_uploader import upload_to_youtube
 from src.instagram_uploader import upload_to_instagram
@@ -144,10 +145,9 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     total_duration = SCENE_DURATION * len(scenes)
 
     if not music_path:
-        print("\n[ 3/3 ] Generating ambient music + building video...")
-        ambient_path = os.path.join(TEMP_DIR, "ambient.wav")
-        generate_ambient(total_duration, ambient_path)
-        music_path = ambient_path
+        print("\n[ 3/3 ] Fetching trending music + building video...")
+        music_out = os.path.join(TEMP_DIR, "music")
+        music_path = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out)
     else:
         print("\n[ 3/3 ] Building video...")
 
