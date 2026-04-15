@@ -179,8 +179,17 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     caption  = f"{title}\n\n{hashtags}"
 
     print("[ Upload ] Posting to social media...")
-    yt_url = upload_to_youtube(output, title=title, description=topic)
-    ig_url = upload_to_instagram(output, caption=caption)
+    try:
+        yt_url = upload_to_youtube(output, title=title, description=topic)
+    except Exception as e:
+        print(f"  YouTube upload failed: {e}")
+        yt_url = None
+
+    try:
+        ig_url = upload_to_instagram(output, caption=caption)
+    except Exception as e:
+        print(f"  Instagram upload failed: {e}")
+        ig_url = None
 
     if yt_url or ig_url:
         print(f"\n  Published:")
