@@ -1,0 +1,80 @@
+name: Generate Peaceful Quote Video
+
+# ─── Schedule: 3 times daily ─────────────────────────────────────────────
+# Adjust times (UTC) to suit your timezone and posting schedule
+# Examples: 6 AM UTC = 11:30 AM IST,  14 PM UTC = 7:30 PM IST,  22 PM UTC = 3:30 AM IST
+on:
+  schedule:
+    - cron: '0 6 * * *'    # 6:00 AM UTC  → 11:30 AM IST
+    - cron: '0 12 * * *'   # 12:00 PM UTC → 5:30 PM IST
+    - cron: '0 18 * * *'   # 6:00 PM UTC  → 11:30 PM IST
+  workflow_dispatch:       # also allow manual trigger from GitHub UI
+    inputs:
+      topic:
+        description: 'Custom quote theme (leave empty for auto)'
+        required: false
+        default: ''
+      scenes:
+        description: 'Number of scenes (default: 7)'
+        required: false
+        default: '7'
+      language:
+        description: 'Language: en / te / hi / ta / ja'
+        required: false
+        default: 'en'
+
+jobs:
+  generate:
+    name: Generate video
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Checkout repo ───────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python ───────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      # ── 3. System dependencies (FFmpeg + Noto fonts for Unicode text) ──
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            fonts-noto \
+            fonts-noto-cjk \
+            fonts-noto-color-emoji
+
+      # ── 4. Python dependencies ─────────────────────────────────────────
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # ── 5. Generate video ──────────────────────────────────────────────
+      - name: Generate quote video
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          HF_TOKEN:     ${{ secrets.HF_TOKEN }}
+        run: |
+          TOPIC="${{ github.event.inputs.topic }}"
+          SCENES="${{ github.event.inputs.scenes || '7' }}"
+          LANG="${{ github.event.inputs.language || 'en' }}"
+
+          if [ -z "$TOPIC" ]; then
+            python main.py --scenes "$SCENES" --lang "$LANG"
+          else
+            python main.py "$TOPIC" --scenes "$SCENES" --lang "$LANG"
+          fi
+
+      # ── 6. Upload video as downloadable artifact ───────────────────────
+      - name: Upload video
+        uses: actions/upload-artifact@v4
+        with:
+          name: quote-video-${{ github.run_number }}
+          path: output/*.mp4
+          retention-days: 14    # available to download for 14 days

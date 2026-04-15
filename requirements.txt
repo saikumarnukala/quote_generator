@@ -1,0 +1,14 @@
+﻿# Core AI / generation
+groq>=0.9.0
+requests>=2.31.0
+
+# Image processing
+Pillow>=10.0.0
+
+# Video assembly
+moviepy==1.0.3
+numpy>=1.24.0
+decorator==4.4.2
+
+# Environment
+python-dotenv>=1.0.0
