@@ -5,13 +5,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import (
     AudioFileClip,
-    ImageSequenceClip,
+    VideoFileClip,
+    ImageClip,
     concatenate_videoclips,
+    CompositeVideoClip,
 )
 
-VIDEO_W = 1280
-VIDEO_H = 720
-FPS     = 24
+VIDEO_W = 1080
+VIDEO_H = 1920
+FPS     = 30
 
 
 # =====================================================================
@@ -29,14 +31,14 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
 
     font_candidates = [
         # Noto fonts (installed by GitHub Actions / Ubuntu)
-        ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",         36, 24),
-        ("/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf",   36, 24),
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",             36, 24),
+        ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",         56, 36),
+        ("/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf",   56, 36),
+        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",             56, 36),
         # Windows fonts
-        ("C:/Windows/Fonts/NirmalaUI.ttf",  36, 24),
-        ("C:/Windows/Fonts/Georgia.ttf",    36, 24),
-        ("C:/Windows/Fonts/Calibri.ttf",    36, 24),
-        ("C:/Windows/Fonts/Arial.ttf",      36, 24),
+        ("C:/Windows/Fonts/NirmalaUI.ttf",  56, 36),
+        ("C:/Windows/Fonts/Georgia.ttf",    56, 36),
+        ("C:/Windows/Fonts/Calibri.ttf",    56, 36),
+        ("C:/Windows/Fonts/Arial.ttf",      56, 36),
     ]
     font = q_font = None
     for fp, fs, afs in font_candidates:
@@ -73,9 +75,9 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
     quote_lines = _wrap(quote, font)
     author_line = f"\u2014 {author}" if author else None
 
-    line_h   = 48
-    author_h = 32
-    pad_v    = 24
+    line_h   = 72
+    author_h = 48
+    pad_v    = 40
     total_h  = len(quote_lines) * line_h + (author_h if author_line else 0) + pad_v * 2
 
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -91,7 +93,7 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
             tw = draw.textbbox((0, 0), line, font=font)[2]
         except Exception:
             tw = len(line) * 18
-        x = max(60, (width - tw) // 2)
+        x = max(80, (width - tw) // 2)
         draw.text((x + 2, y + 2), line, font=font,  fill=(0, 0, 0, 180))
         draw.text((x,     y),     line, font=font,  fill=(255, 248, 210, 245))
         y += line_h
@@ -101,7 +103,7 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
             tw = draw.textbbox((0, 0), author_line, font=q_font)[2]
         except Exception:
             tw = len(author_line) * 14
-        x = max(60, (width - tw) // 2)
+        x = max(80, (width - tw) // 2)
         draw.text((x + 1, y + 1), author_line, font=q_font, fill=(0, 0, 0, 140))
         draw.text((x,     y),     author_line, font=q_font, fill=(200, 200, 200, 220))
 
@@ -109,117 +111,96 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
 
 
 # =====================================================================
-# Floating particle system
+# Crop / fit a raw clip to 1080×1920 portrait
 # =====================================================================
 
-def _create_particles(count=45, seed=42):
-    rng = np.random.RandomState(seed)
-    return {
-        "x":          rng.uniform(0, VIDEO_W, count),
-        "y":          rng.uniform(0, VIDEO_H, count),
-        "size":       rng.uniform(2, 5, count),
-        "brightness": rng.uniform(190, 255, count),
-        "speed_x":    rng.uniform(-0.35, 0.35, count),
-        "speed_y":    rng.uniform(-1.0, -0.25, count),
-        "phase":      rng.uniform(0, 2 * math.pi, count),
-    }
+def _fit_to_portrait(clip):
+    """Scale+crop source footage to VIDEO_W × VIDEO_H (cover strategy).
+    If the clip is already the right size (pre-transcoded), returns it as-is."""
+    src_w, src_h = clip.size
 
+    # Fast path: clip already matches target (pre-transcoded by video_fetcher)
+    if src_w == VIDEO_W and src_h == VIDEO_H:
+        return clip
 
-def _overlay_particles(frame, particles, fi):
-    result = frame.astype(np.float32)
-    t = fi / FPS
-    n = len(particles["x"])
-    for i in range(n):
-        px = (particles["x"][i] + particles["speed_x"][i] * fi
-              + 8 * math.sin(particles["phase"][i] + t * 0.7)) % VIDEO_W
-        py = (particles["y"][i] + particles["speed_y"][i] * fi) % VIDEO_H
-        alpha = 0.22 + 0.18 * math.sin(particles["phase"][i] + t * 1.8)
-        if alpha < 0.05:
-            continue
-        s  = int(particles["size"][i])
-        y0 = max(0, int(py) - s);  y1 = min(VIDEO_H, int(py) + s + 1)
-        x0 = max(0, int(px) - s);  x1 = min(VIDEO_W, int(px) + s + 1)
-        if y0 >= y1 or x0 >= x1:
-            continue
-        ys   = np.arange(y0, y1, dtype=np.float32).reshape(-1, 1)
-        xs   = np.arange(x0, x1, dtype=np.float32).reshape(1, -1)
-        dist = np.sqrt((ys - py) ** 2 + (xs - px) ** 2)
-        mask = np.clip(1.0 - dist / (s + 0.5), 0, 1) * alpha
-        b    = particles["brightness"][i]
-        glow = np.array([b, b, b * 0.93], dtype=np.float32)
-        reg  = result[y0:y1, x0:x1]
-        result[y0:y1, x0:x1] = reg + mask[:, :, np.newaxis] * (glow - reg)
-    return np.clip(result, 0, 255).astype(np.uint8)
+    target_ratio = VIDEO_W / VIDEO_H
+    src_ratio    = src_w  / src_h
 
+    if src_ratio > target_ratio:
+        new_h = VIDEO_H
+        new_w = int(src_w * VIDEO_H / src_h)
+    else:
+        new_w = VIDEO_W
+        new_h = int(src_h * VIDEO_W / src_w)
 
-_DIRECTIONS = [
-    (1, 0), (-1, 0), (0, 1), (1, -1), (-1, 1), (1, 1), (-1, -1),
-]
+    x1 = (new_w - VIDEO_W) // 2
+    y1 = (new_h - VIDEO_H) // 2
+
+    def _process(frame):
+        img = Image.fromarray(frame).resize((new_w, new_h), Image.LANCZOS)
+        arr = np.array(img)
+        return arr[y1:y1 + VIDEO_H, x1:x1 + VIDEO_W]
+
+    return clip.fl_image(_process)
 
 
 # =====================================================================
-# Animated scene builder
+# Colour grade — warm cinematic look
 # =====================================================================
 
-def _create_animated_scene(image_path: str, duration: float, scene_idx: int,
-                            overlay_rgba=None) -> ImageSequenceClip:
+def _colour_grade(frame: np.ndarray) -> np.ndarray:
+    """Warm tint + gentle vignette for a cinematic moody feel."""
+    f = frame.astype(np.float32)
+
+    # Warm tint: boost reds, reduce blues slightly
+    f[:, :, 0] = np.clip(f[:, :, 0] * 1.06, 0, 255)
+    f[:, :, 2] = np.clip(f[:, :, 2] * 0.92, 0, 255)
+
+    # Vignette
+    h, w = f.shape[:2]
+    ys = np.linspace(-1, 1, h, dtype=np.float32).reshape(-1, 1)
+    xs = np.linspace(-1, 1, w, dtype=np.float32).reshape(1, -1)
+    vignette = np.clip(1.0 - 0.35 * (ys**2 + xs**2), 0.55, 1.0)[:, :, np.newaxis]
+    f = f * vignette
+
+    return np.clip(f, 0, 255).astype(np.uint8)
+
+
+# =====================================================================
+# Build single scene from real footage
+# =====================================================================
+
+def _build_scene_clip(video_path: str, duration: float, scene_idx: int,
+                      overlay_rgba=None):
     """
-    Create a smooth parallax + breathing-zoom animated clip.
-    Optionally composite a pre-rendered quote overlay onto every frame.
+    Load a Pexels video, trim to `duration`, crop to portrait,
+    apply colour grade and bake in quote overlay.
     """
-    SCALE    = 1.40
-    CANVAS_W = int(VIDEO_W * SCALE)
-    CANVAS_H = int(VIDEO_H * SCALE)
+    raw = VideoFileClip(video_path, audio=False)
 
-    img    = Image.open(image_path).convert("RGB").resize((CANVAS_W, CANVAS_H), Image.LANCZOS)
-    canvas = np.array(img)
+    # Loop if clip is shorter than needed
+    if raw.duration < duration:
+        loops = math.ceil(duration / raw.duration)
+        raw   = concatenate_videoclips([raw] * loops)
 
-    n_frames = max(2, int(duration * FPS))
-    dx, dy   = _DIRECTIONS[scene_idx % len(_DIRECTIONS)]
-    max_sx   = int(VIDEO_W * 0.14)
-    max_sy   = int(VIDEO_H * 0.09)
+    # Varied but deterministic start offset
+    max_start = max(0.0, raw.duration - duration)
+    start     = (scene_idx * 3.7) % (max_start + 0.001)
+    start     = min(start, max_start)
+    clip      = raw.subclip(start, start + duration)
 
-    depth     = np.linspace(0.08, 1.0, VIDEO_H, dtype=np.float64).reshape(-1, 1)
-    base_cols = np.arange(VIDEO_W, dtype=np.intp).reshape(1, -1)
-    center_x  = (CANVAS_W - VIDEO_W) // 2
-    center_y  = (CANVAS_H - VIDEO_H) // 2
-    base_rows = (np.arange(VIDEO_H, dtype=np.intp) + center_y).reshape(-1, 1)
-    particles = _create_particles(45, seed=scene_idx * 7 + 13)
+    # Portrait crop
+    clip = _fit_to_portrait(clip)
 
-    # Pre-compute overlay alpha for blending (if quote overlay provided)
-    ov_alpha = ov_rgb = None
+    # Colour grade
+    clip = clip.fl_image(_colour_grade)
+
+    # Quote overlay
     if overlay_rgba is not None:
-        ov_alpha = overlay_rgba[:, :, 3:4].astype(np.float32) / 255.0
-        ov_rgb   = overlay_rgba[:, :, :3].astype(np.float32)
+        overlay_img = ImageClip(overlay_rgba, ismask=False).set_duration(duration)
+        clip = CompositeVideoClip([clip, overlay_img])
 
-    frames = []
-    for fi in range(n_frames):
-        t    = fi / max(n_frames - 1, 1)
-        ease = t * t * (3 - 2 * t)
-
-        shift_x = (depth * max_sx * ease * dx).astype(np.intp)
-        shift_y = (depth * max_sy * ease * dy).astype(np.intp)
-
-        breath     = 1.0 + 0.018 * math.sin(2 * math.pi * fi / (FPS * 2.5))
-        zoom_off_x = int((VIDEO_W * (breath - 1)) / 2)
-        zoom_off_y = int((VIDEO_H * (breath - 1)) / 2)
-
-        sample_x = base_cols + center_x + shift_x - zoom_off_x
-        sample_y = base_rows + shift_y - zoom_off_y
-        np.clip(sample_x, 0, CANVAS_W - 1, out=sample_x)
-        np.clip(sample_y, 0, CANVAS_H - 1, out=sample_y)
-
-        frame = canvas[sample_y, sample_x]
-        frame = _overlay_particles(frame, particles, fi)
-
-        if ov_alpha is not None:
-            frame = np.clip(
-                frame.astype(np.float32) * (1 - ov_alpha) + ov_rgb * ov_alpha, 0, 255
-            ).astype(np.uint8)
-
-        frames.append(frame)
-
-    return ImageSequenceClip(frames, fps=FPS)
+    return clip.set_fps(FPS)
 
 
 # =====================================================================
@@ -228,24 +209,29 @@ def _create_animated_scene(image_path: str, duration: float, scene_idx: int,
 
 def build_video(
     scenes: list,
-    image_paths: list,
-    output_path: str,
+    video_paths: list = None,
+    output_path: str = "",
     music_path: str = None,
     quote_data: list = None,
     scene_duration: float = 12.0,
+    # Legacy compat
+    image_paths: list = None,
 ):
     """
-    Build the final peaceful quotes video.
+    Build the final peaceful quotes video from real Pexels footage.
 
     Args:
         scenes:         List of scene dicts from quote_generator.
-        image_paths:    Landscape PNG per scene.
+        video_paths:    Downloaded MP4 per scene (replaces image_paths).
         output_path:    Where to write the final MP4.
-        music_path:     Path to ambient WAV/MP3 file.
+        music_path:     Path to ambient WAV file.
         quote_data:     Same as scenes — used to render text overlay.
         scene_duration: Seconds per scene (default 12s).
     """
-    print(f"        Rendering {len(scenes)} scenes at {scene_duration}s each...")
+    if video_paths is None:
+        video_paths = image_paths or []
+
+    print(f"        Compositing {len(scenes)} scenes at {scene_duration}s each...")
     scene_clips = []
 
     for i, scene in enumerate(scenes):
@@ -256,10 +242,10 @@ def build_video(
             overlay = _make_quote_overlay(VIDEO_W, VIDEO_H,
                                           q.get("quote", ""),
                                           q.get("author", ""))
-        clip = _create_animated_scene(image_paths[i], scene_duration, i, overlay)
+        clip = _build_scene_clip(video_paths[i], scene_duration, i, overlay)
         scene_clips.append(clip)
 
-    # Crossfade transitions between scenes
+    # Crossfade transitions
     CROSSFADE = 0.8
     if len(scene_clips) > 1:
         final = concatenate_videoclips(scene_clips, method="compose", padding=-CROSSFADE)
@@ -268,7 +254,6 @@ def build_video(
 
     # Attach ambient music
     if music_path and os.path.exists(music_path):
-        from moviepy.editor import AudioFileClip
         music = AudioFileClip(music_path).volumex(0.80).set_duration(final.duration)
         final = final.set_audio(music)
 
@@ -283,5 +268,11 @@ def build_video(
     )
 
     for c in scene_clips:
-        c.close()
-    final.close()
+        try:
+            c.close()
+        except Exception:
+            pass
+    try:
+        final.close()
+    except Exception:
+        pass

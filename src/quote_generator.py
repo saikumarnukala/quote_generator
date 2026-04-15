@@ -29,10 +29,10 @@ def generate_quotes(topic: str, api_key: str, num_scenes: int = 7, language: str
           "scenes": [
             {
               "location":     str,   # location name (display only)
-              "image_prompt": str,   # English prompt for image generation
+              "video_search": str,   # English keywords for Pexels video search
               "quote":        str,   # the inspirational quote
               "author":       str,   # attribution
-              "narration":    str,   # text spoken aloud
+              "narration":    str,   # text for soft narration
             }, ...
           ]
         }
@@ -50,19 +50,19 @@ Generate exactly {num_scenes} peaceful scenes. Return ONLY valid JSON — no mar
   "scenes": [
     {{
       "location": "short beautiful location name in {lang_name}",
-      "image_prompt": "photorealistic 4K landscape photograph, [specific peaceful natural place], golden hour or sunrise lighting, serene atmosphere, dramatic yet calming, ultra detailed, professional photography, no people, cinematic wide shot, breathtaking beauty",
+      "video_search": "2-4 English words for Pexels search, e.g. 'rain forest leaves' or 'ocean waves sunset' or 'misty mountain waterfall'",
       "quote": "a timeless, profound inspirational quote in {lang_name}",
       "author": "Real person name, or 'Ancient Wisdom', or 'Unknown'",
-      "narration": "2-3 sentences in {lang_name} spoken softly like a meditation guide: describe the beauty of the location, then gently introduce the meaning of the quote"
+      "narration": "2-3 sentences in {lang_name} spoken softly like a meditation guide"
     }}
   ]
 }}
 
 Rules:
-- image_prompt MUST always be in English only (never translate it)
+- video_search MUST always be in English only — 2-4 descriptive nature words
 - All other fields (title, location, quote, author, narration) MUST be in {lang_name}
 - Quotes: timeless, uplifting, philosophical — mix famous and original
-- Locations: vary widely — Himalayan peaks, Amazon forest, Japanese bamboo grove, Sahara sunrise, Norwegian fjord, Bali rice terraces, Scottish highlands, etc.
+- video_search: vary widely — rain on leaves, waterfall mist, ocean waves, forest sunlight, snow mountains, cherry blossom, desert sunrise, bamboo wind, river calm, autumn forest
 - Each scene should feel like a different magical corner of the world
 - narration should feel warm, slow, and peaceful — not rushed"""
 

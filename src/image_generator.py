@@ -18,16 +18,17 @@ def generate_image(prompt: str, hf_token: str, output_path: str, retries: int = 
     headers = {"Authorization": f"Bearer {hf_token}"}
 
     enhanced_prompt = (
-        f"{prompt}, anime style, masterpiece, best quality, "
-        "highly detailed, sharp focus, vibrant colors, cinematic composition"
+        f"{prompt}, vertical composition, portrait orientation, "
+        "masterpiece, best quality, highly detailed, sharp focus, "
+        "vibrant colors, cinematic lighting"
     )
 
     payload = {
         "inputs": enhanced_prompt,
         "parameters": {
             "negative_prompt": NEGATIVE_PROMPT,
-            "width": 768,
-            "height": 432,
+            "width": 576,
+            "height": 1024,
             "num_inference_steps": 25,
             "guidance_scale": 7.0,
         },
@@ -45,7 +46,7 @@ def generate_image(prompt: str, hf_token: str, output_path: str, retries: int = 
                     raise ValueError(f"Unexpected response content: {response.text[:200]}")
 
                 image = Image.open(BytesIO(response.content)).convert("RGB")
-                image = image.resize((1280, 720), Image.LANCZOS)
+                image = image.resize((1080, 1920), Image.LANCZOS)
                 image.save(output_path)
                 return output_path
 

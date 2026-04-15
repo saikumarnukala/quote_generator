@@ -20,11 +20,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import GROQ_API_KEY, HF_TOKEN, OUTPUT_DIR, TEMP_DIR
+from config import GROQ_API_KEY, PEXELS_API_KEY, OUTPUT_DIR, TEMP_DIR
 from src.quote_generator import generate_quotes
-from src.image_generator import generate_image
+from src.video_fetcher import fetch_nature_video
 from src.ambient_generator import generate_ambient
 from src.video_builder import build_video
+from src.youtube_uploader import upload_to_youtube
+from src.instagram_uploader import upload_to_instagram
 
 
 # ---------------------------------------------------------------------------
@@ -83,8 +85,8 @@ def _check_env() -> None:
     missing = []
     if not GROQ_API_KEY:
         missing.append("GROQ_API_KEY")
-    if not HF_TOKEN:
-        missing.append("HF_TOKEN")
+    if not PEXELS_API_KEY:
+        missing.append("PEXELS_API_KEY")
     if missing:
         print("ERROR: Missing environment variables in .env:")
         for k in missing:
@@ -127,14 +129,15 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     with open(os.path.join(TEMP_DIR, "quotes.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-    # ── Step 2 / 3 · Generate landscape images ────────────────────────
-    print("\n[ 2/3 ] Generating AI landscape images (HuggingFace)...")
-    image_paths = []
+    # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
+    print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")
+    video_paths = []
     for i, scene in enumerate(scenes):
         print(f"        Scene {i + 1}/{len(scenes)}...")
-        img_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.png")
-        generate_image(scene["image_prompt"], HF_TOKEN, img_path)
-        image_paths.append(img_path)
+        vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.mp4")
+        search   = scene.get("video_search", scene.get("location", "peaceful nature"))
+        fetch_nature_video(search, PEXELS_API_KEY, vid_path)
+        video_paths.append(vid_path)
         print(f"        Scene {i + 1} ✓")
 
     # ── Step 3 / 3 · Build video ───────────────────────────────────────
@@ -153,11 +156,11 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     output = os.path.join(OUTPUT_DIR, f"{safe}_{ts}.mp4")
 
     build_video(
-        scenes      = scenes,
-        image_paths = image_paths,
-        output_path = output,
-        music_path  = music_path,
-        quote_data  = scenes,
+        scenes         = scenes,
+        video_paths    = video_paths,
+        output_path    = output,
+        music_path     = music_path,
+        quote_data     = scenes,
         scene_duration = SCENE_DURATION,
     )
 
@@ -169,6 +172,22 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     print(f"  Duration ~ {total_duration:.0f}s  ({total_duration / 60:.1f} min)")
     print(f"  Scenes   : {len(scenes)}")
     print(f"{'=' * 55}\n")
+
+    # ── Optional: Upload to YouTube & Instagram ────────────────────────
+    # Uploads are silently skipped if the required secrets are not set.
+    hashtags = "#peaceful #quotes #nature #mindfulness #motivation #shorts"
+    caption  = f"{title}\n\n{hashtags}"
+
+    print("[ Upload ] Posting to social media...")
+    yt_url = upload_to_youtube(output, title=title, description=topic)
+    ig_url = upload_to_instagram(output, caption=caption)
+
+    if yt_url or ig_url:
+        print(f"\n  Published:")
+        if yt_url:
+            print(f"    YouTube  → {yt_url}")
+        if ig_url:
+            print(f"    Instagram→ {ig_url}")
 
     return output
 

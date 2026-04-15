@@ -12,3 +12,8 @@ decorator==4.4.2
 
 # Environment
 python-dotenv>=1.0.0
+
+# YouTube upload (optional)
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+google-auth-httplib2>=0.2.0

@@ -1,0 +1,137 @@
+"""
+Instagram Reels uploader via Meta Graph API — resumable upload (no external hosting needed).
+
+Required GitHub Secrets (env vars):
+    INSTAGRAM_USER_ID       — numeric Instagram user ID
+    INSTAGRAM_ACCESS_TOKEN  — long-lived access token (valid 60 days, auto-refreshed)
+
+How to get these:
+    1. Go to https://developers.facebook.com → Create app → Add "Instagram Graph API"
+    2. Connect your Instagram Business or Creator account to a Facebook Page
+    3. Use the Graph API Explorer to generate a long-lived token with scopes:
+           instagram_basic, instagram_content_publish, pages_read_engagement
+    4. Store INSTAGRAM_USER_ID and INSTAGRAM_ACCESS_TOKEN as GitHub Secrets
+"""
+
+import os
+import time
+
+import requests
+
+GRAPH_BASE  = "https://graph.facebook.com/v19.0"
+UPLOAD_BASE = "https://rupload.facebook.com/video-upload/v19.0"
+
+INSTAGRAM_USER_ID      = os.getenv("INSTAGRAM_USER_ID")
+INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+
+
+def _refresh_token(token: str) -> str:
+    """Extend a long-lived token's 60-day expiry window."""
+    try:
+        r = requests.get(
+            f"{GRAPH_BASE}/oauth/access_token",
+            params={"grant_type": "ig_refresh_token", "access_token": token},
+            timeout=30,
+        )
+        if r.status_code == 200:
+            return r.json().get("access_token", token)
+    except Exception:
+        pass
+    return token
+
+
+def upload_to_instagram(video_path: str, caption: str) -> str | None:
+    """
+    Upload *video_path* as an Instagram Reel using the resumable upload API.
+
+    Flow:
+        1. Create upload session (POST /media with upload_type=resumable)
+        2. Stream video bytes to the returned upload URI
+        3. Poll container status until FINISHED
+        4. Publish via /media_publish
+
+    Returns the Reel URL on success.
+    Returns None and prints a warning if credentials are not configured.
+    Raises RuntimeError on API failure.
+    """
+    if not all([INSTAGRAM_USER_ID, INSTAGRAM_ACCESS_TOKEN]):
+        print("  Instagram: credentials not set (INSTAGRAM_USER_ID / INSTAGRAM_ACCESS_TOKEN), skipping.")
+        return None
+
+    token = _refresh_token(INSTAGRAM_ACCESS_TOKEN)
+    print("  Uploading to Instagram Reels...")
+
+    file_size = os.path.getsize(video_path)
+
+    # ── Step 1: Create upload session ─────────────────────────────────
+    r = requests.post(
+        f"{GRAPH_BASE}/{INSTAGRAM_USER_ID}/media",
+        data={
+            "media_type":    "REELS",
+            "upload_type":   "resumable",
+            "caption":       caption,
+            "share_to_feed": "true",
+            "access_token":  token,
+        },
+        timeout=30,
+    )
+    if r.status_code != 200:
+        raise RuntimeError(f"Instagram: failed to create upload session: {r.text}")
+
+    resp_data    = r.json()
+    container_id = resp_data.get("id")
+    upload_uri   = resp_data.get("uri")
+
+    if not container_id or not upload_uri:
+        raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
+
+    # ── Step 2: Stream video bytes ────────────────────────────────────
+    with open(video_path, "rb") as fh:
+        up = requests.post(
+            upload_uri,
+            headers={
+                "Authorization": f"OAuth {token}",
+                "offset":        "0",
+                "file_size":     str(file_size),
+                "Content-Type":  "application/octet-stream",
+            },
+            data=fh,
+            timeout=300,
+        )
+    if up.status_code not in (200, 201):
+        raise RuntimeError(f"Instagram: video upload failed ({up.status_code}): {up.text}")
+
+    # ── Step 3: Poll until processing finishes (max 5 minutes) ────────
+    print("  Instagram: processing", end="", flush=True)
+    for _ in range(30):
+        time.sleep(10)
+        status_r = requests.get(
+            f"{GRAPH_BASE}/{container_id}",
+            params={"fields": "status_code,status", "access_token": token},
+            timeout=30,
+        )
+        payload = status_r.json()
+        code    = payload.get("status_code", "")
+        if code == "FINISHED":
+            print(" ready.")
+            break
+        if code == "ERROR":
+            raise RuntimeError(f"Instagram: media processing error: {payload}")
+        print(".", end="", flush=True)
+    else:
+        raise RuntimeError("Instagram: processing timed out after 5 minutes.")
+
+    # ── Step 4: Publish ────────────────────────────────────────────────
+    pub = requests.post(
+        f"{GRAPH_BASE}/{INSTAGRAM_USER_ID}/media_publish",
+        data={"creation_id": container_id, "access_token": token},
+        timeout=30,
+    )
+    pub_data = pub.json()
+    media_id = pub_data.get("id")
+    if not media_id:
+        raise RuntimeError(f"Instagram: publish failed: {pub_data}")
+
+    url = f"https://www.instagram.com/p/{media_id}/"
+    print(f"  Instagram ✓ → {url}")
+    return url
