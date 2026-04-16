@@ -76,9 +76,9 @@ jobs:
           LANG="${{ github.event.inputs.language || 'en' }}"
 
           if [ -z "$TOPIC" ]; then
-            python main.py --scenes "$SCENES" --lang "$LANG"
+            python main.py --scenes "$SCENES" --lang "$LANG" --allow-jamendo-upload
           else
-            python main.py "$TOPIC" --scenes "$SCENES" --lang "$LANG"
+            python main.py "$TOPIC" --scenes "$SCENES" --lang "$LANG" --allow-jamendo-upload
           fi
 
       # ── 6. Commit updated history back to repo (so next run skips used content) ──
