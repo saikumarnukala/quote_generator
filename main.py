@@ -8,6 +8,7 @@ Usage:
     python main.py                                  <- auto rotating topic
     python main.py "gratitude and inner peace"      <- custom topic
     python main.py --scenes 8 --lang te             <- Telugu, 8 scenes
+    python main.py --music ./jamendo_track.mp3 --allow-jamendo-upload
 """
 import json
 import os
@@ -81,6 +82,12 @@ def _safe_filename(title: str) -> str:
     return "".join(c if c.isalnum() or c in " _-" else "" for c in title).replace(" ", "_")[:60]
 
 
+def _is_jamendo_track(music_path: str) -> bool:
+    if not music_path:
+        return False
+    return "jamendo" in os.path.normpath(music_path).lower()
+
+
 def _check_env() -> None:
     missing = []
     if not GROQ_API_KEY:
@@ -102,7 +109,7 @@ SCENE_DURATION = 12.0   # seconds per scene — comfortable reading time
 
 
 def run(topic: str = None, num_scenes: int = 7, language: str = "en",
-        music_path: str = None) -> str:
+        music_path: str = None, allow_jamendo_upload: bool = False) -> str:
     _check_env()
     _setup_dirs()
 
@@ -175,6 +182,12 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
 
     # ── Optional: Upload to YouTube & Instagram ────────────────────────
     # Uploads are silently skipped if the required secrets are not set.
+    if _is_jamendo_track(music_path) and not allow_jamendo_upload:
+        print("[ Upload ] Skipped YouTube/Instagram upload.")
+        print("  Reason: Jamendo music detected. Upload is blocked by default to reduce copyright claims.")
+        print("  If you own the required Jamendo license/rights, rerun with --allow-jamendo-upload.")
+        return output
+
     hashtags = "#peaceful #quotes #nature #mindfulness #motivation #shorts"
     caption  = f"{title}\n\n{hashtags}"
 
@@ -215,8 +228,16 @@ if __name__ == "__main__":
                         choices=list(LANGUAGE_NAMES.keys()),
                         help="Language: en, te (Telugu), hi (Hindi), ta (Tamil), ja (Japanese)")
     parser.add_argument("--music",   default=None,          help="Path to custom background music file")
+    parser.add_argument("--allow-jamendo-upload", action="store_true",
+                        help="Allow auto-upload when using Jamendo music (only if you have proper rights/license)")
     args = parser.parse_args()
 
     _topic = " ".join(args.topic).strip() if args.topic else None
 
-    run(_topic, num_scenes=args.scenes, language=args.lang, music_path=args.music)
+    run(
+        _topic,
+        num_scenes=args.scenes,
+        language=args.lang,
+        music_path=args.music,
+        allow_jamendo_upload=args.allow_jamendo_upload,
+    )
