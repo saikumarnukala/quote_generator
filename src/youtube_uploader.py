@@ -96,5 +96,5 @@ def upload_to_youtube(
         raise RuntimeError(f"YouTube upload failed: {response}")
 
     url = f"https://www.youtube.com/watch?v={video_id}"
-    print(f"  YouTube ✓ → {url}")
+    print(f"  YouTube [OK] -> {url}")
     return url

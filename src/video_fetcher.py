@@ -166,14 +166,14 @@ def fetch_nature_video(
                         continue
                     url = best["link"]
                     w, h = best.get("width", 0), best.get("height", 0)
-                    print(f"        Downloading: {query!r} → {video.get('id')} ({w}×{h})")
+                    print(f"        Downloading: {query!r} -> {video.get('id')} ({w}x{h})")
                     # Download to a temp path, then pre-transcode to target resolution
                     raw_path = output_path + ".raw.mp4"
                     if _download(url, raw_path, api_key):
-                        print(f"          Pre-transcoding to 1080×1920 …", end=" ", flush=True)
+                        print(f"          Pre-transcoding to 1080x1920 ...", end=" ", flush=True)
                         if _pretranscode(raw_path, output_path):
                             os.remove(raw_path)
-                            print("✓")
+                            print("done")
                         else:
                             # FFmpeg not available — use raw file as-is
                             os.replace(raw_path, output_path)

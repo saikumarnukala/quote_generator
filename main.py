@@ -1,4 +1,4 @@
-﻿"""
+"""
 Peaceful Quotes Video Generator
 ================================
 Generates calming AI landscape scenes paired with inspirational quotes
@@ -176,7 +176,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
         search   = scene.get("video_search", scene.get("location", "peaceful nature"))
         fetch_nature_video(search, PEXELS_API_KEY, vid_path)
         video_paths.append(vid_path)
-        print(f"        Scene {i + 1} ✓")
+        print(f"        Scene {i + 1} done")
 
     # ── Step 3 / 3 · Build video ───────────────────────────────────────
     total_duration = SCENE_DURATION * len(scenes)
@@ -205,7 +205,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
 
     print(f"\n{'=' * 55}")
     print(f"  Done!")
-    print(f"  Video    → {output}")
+    print(f"  Video    -> {output}")
     print(f"  Duration ~ {total_duration:.0f}s  ({total_duration / 60:.1f} min)")
     print(f"  Scenes   : {len(scenes)}")
     print(f"{'=' * 55}\n")
@@ -235,9 +235,9 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     if yt_url or ig_url:
         print(f"\n  Published:")
         if yt_url:
-            print(f"    YouTube  → {yt_url}")
+            print(f"    YouTube  -> {yt_url}")
         if ig_url:
-            print(f"    Instagram→ {ig_url}")
+            print(f"    Instagram-> {ig_url}")
 
     return output
 
