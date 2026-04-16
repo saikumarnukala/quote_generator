@@ -49,6 +49,21 @@ TOPICS = [
     "self-love and acceptance",
     "finding light in darkness",
     "the art of being still",
+    "the beauty of impermanence",
+    "healing through solitude and reflection",
+    "the courage to be vulnerable",
+    "finding wonder in the ordinary",
+    "the rhythm of the universe within us",
+    "surrendering to the flow of life",
+    "the quiet power of gentleness",
+    "ancient wisdom for modern souls",
+    "the sacred art of doing nothing",
+    "finding home within yourself",
+    "the poetry of rain and renewal",
+    "dancing with uncertainty",
+    "the forgotten language of the heart",
+    "moonlight, mystery and inner knowing",
+    "the alchemy of pain into wisdom",
 ]
 
 LANGUAGE_NAMES = {

@@ -40,31 +40,39 @@ def generate_quotes(topic: str, api_key: str, num_scenes: int = 7, language: str
     client = Groq(api_key=api_key)
     lang_name = LANGUAGE_NAMES.get(language, "English")
 
-    prompt = f"""Create a calming, inspirational quote video about the theme: "{topic}"
+    prompt = f"""You are a world-class screenwriter creating a short cinematic meditation film about: "{topic}"
 
-Generate exactly {num_scenes} peaceful scenes. Return ONLY valid JSON — no markdown, no extra text.
+Generate exactly {num_scenes} visually stunning scenes. Return ONLY valid JSON — no markdown, no extra text.
 
 {{
-  "title": "video title in {lang_name}",
+  "title": "a poetic, evocative video title in {lang_name} (max 6 words)",
   "theme": "{topic}",
   "scenes": [
     {{
       "location": "short beautiful location name in {lang_name}",
-      "video_search": "2-4 English words for Pexels search, e.g. 'rain forest leaves' or 'ocean waves sunset' or 'misty mountain waterfall'",
-      "quote": "a timeless, profound inspirational quote in {lang_name}",
+      "video_search": "3-5 hyper-specific English words for Pexels search — cinematic quality",
+      "quote": "a deeply moving, soul-stirring quote in {lang_name}",
       "author": "Real person name, or 'Ancient Wisdom', or 'Unknown'",
-      "narration": "2-3 sentences in {lang_name} spoken softly like a meditation guide"
+      "narration": "2-3 sentences in {lang_name} — poetic, intimate, like a whisper to the soul"
     }}
   ]
 }}
 
 Rules:
-- video_search MUST always be in English only — 2-4 descriptive nature words
+- video_search MUST always be in English only — be ULTRA SPECIFIC and cinematic:
+  GOOD: "aerial misty mountain forest sunrise", "slow motion rain drops leaves macro", "golden hour ocean waves drone", "4k timelapse northern lights aurora", "underwater coral reef sunlight rays"
+  BAD: "nature", "peaceful video", "nice scenery"
 - All other fields (title, location, quote, author, narration) MUST be in {lang_name}
-- Quotes: timeless, uplifting, philosophical — mix famous and original
-- video_search: vary widely — rain on leaves, waterfall mist, ocean waves, forest sunlight, snow mountains, cherry blossom, desert sunrise, bamboo wind, river calm, autumn forest
-- Each scene should feel like a different magical corner of the world
-- narration should feel warm, slow, and peaceful — not rushed"""
+- Quotes: Mix these styles across scenes:
+  * Profound philosophical wisdom (Rumi, Lao Tzu, Marcus Aurelius calibre)
+  * Raw emotional truth that hits the heart
+  * Poetic metaphors about life, nature, and the human spirit
+  * Short powerful one-liners that linger in the mind
+- NO generic motivational clichés — every quote must feel like it was written by a poet
+- video_search: Use CINEMATIC search terms — aerial shots, golden hour, slow motion, timelapse, macro close-up, drone footage, 4k nature
+  Vary across: misty mountains, bioluminescent ocean, northern lights, cherry blossom snowfall, volcanic landscape, underwater cave, dense rainforest canopy, ice cave glacier, desert sand dunes sunset, fireflies forest night
+- Each scene should feel like a breathtaking moment frozen in time
+- narration: intimate and poetic — as if speaking directly to one person's soul, not a crowd"""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",

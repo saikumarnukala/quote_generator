@@ -17,24 +17,35 @@ import requests
 JAMENDO_TRACKS_URL = "https://api.jamendo.com/v3.0/tracks/"
 
 # Map topic keywords to Jamendo music tags (space-separated for the API)
+# Each entry now has MULTIPLE tag combos so we can rotate for variety
 _TOPIC_TAG_MAP = [
-    (["peace", "mindful", "calm", "still", "silent", "quiet"],   "ambient meditation"),
-    (["nature", "forest", "ocean", "mountain", "landscape"],      "ambient acoustic"),
-    (["love", "kindness", "compassion", "heart"],                  "romantic emotional"),
-    (["courage", "strength", "growth", "power"],                   "motivational uplifting"),
-    (["wisdom", "patience", "philosophy"],                         "ambient cinematic"),
-    (["gratitude", "joy", "light", "hope", "freedom"],             "uplifting positive"),
-    (["harmony", "balance", "zen"],                                "ambient meditation"),
+    (["peace", "mindful", "calm", "still", "silent", "quiet"],
+     ["ambient meditation", "ambient piano", "cinematic calm", "chillout ambient"]),
+    (["nature", "forest", "ocean", "mountain", "landscape"],
+     ["ambient acoustic", "nature cinematic", "acoustic relaxing", "ambient electronic"]),
+    (["love", "kindness", "compassion", "heart"],
+     ["romantic emotional", "piano emotional", "acoustic love", "cinematic emotional"]),
+    (["courage", "strength", "growth", "power"],
+     ["motivational uplifting", "cinematic epic", "inspiring orchestral", "uplifting electronic"]),
+    (["wisdom", "patience", "philosophy"],
+     ["ambient cinematic", "neoclassical", "piano solo", "ambient downtempo"]),
+    (["gratitude", "joy", "light", "hope", "freedom"],
+     ["uplifting positive", "happy acoustic", "cinematic inspiring", "ambient uplifting"]),
+    (["harmony", "balance", "zen"],
+     ["ambient meditation", "zen relaxing", "chillout lounge", "ambient drone"]),
+    (["darkness", "struggle", "pain", "loss"],
+     ["cinematic dark", "ambient atmospheric", "piano melancholic", "cinematic emotional"]),
 ]
-_DEFAULT_TAGS = "ambient chill"
+_DEFAULT_TAGS = ["ambient chill", "cinematic ambient", "lofi chill", "downtempo ambient"]
 
 
 def _tags_for_topic(topic: str) -> str:
+    """Pick a random tag combo that matches the topic mood."""
     topic_lower = topic.lower()
-    for keywords, tags in _TOPIC_TAG_MAP:
+    for keywords, tag_list in _TOPIC_TAG_MAP:
         if any(kw in topic_lower for kw in keywords):
-            return tags
-    return _DEFAULT_TAGS
+            return random.choice(tag_list)
+    return random.choice(_DEFAULT_TAGS)
 
 
 def fetch_trending_music(
@@ -111,8 +122,10 @@ def _find_track(client_id: str, tags: str, min_duration: float):
         "offset":        offset,
         "order":         order,
         "tags":          tags,
-        "audiodlformat": "mp32",
+        "audiodlformat": "mp31",            # mp31 = 320 kbps (highest quality)
         "minlength":     int(max(min_duration, 30)),   # Jamendo minimum: 30 s
+        "boost":         "popularity_total", # prefer well-rated tracks
+        "include":       "musicinfo",        # get genre/mood metadata
     }
     resp = requests.get(JAMENDO_TRACKS_URL, params=params, timeout=15)
     resp.raise_for_status()
@@ -126,8 +139,8 @@ def _find_track(client_id: str, tags: str, min_duration: float):
         tracks = resp.json().get("results", [])
 
     if not tracks:
-        # Broader fallback — try default tags with no offset
-        params["tags"]   = _DEFAULT_TAGS
+        # Broader fallback — try a random default tag combo
+        params["tags"]   = random.choice(_DEFAULT_TAGS)
         params["offset"] = random.randint(0, 100)
         resp = requests.get(JAMENDO_TRACKS_URL, params=params, timeout=15)
         resp.raise_for_status()
