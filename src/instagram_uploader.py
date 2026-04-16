@@ -133,5 +133,5 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
         raise RuntimeError(f"Instagram: publish failed: {pub_data}")
 
     url = f"https://www.instagram.com/p/{media_id}/"
-    print(f"  Instagram ✓ → {url}")
+    print(f"  Instagram [OK] -> {url}")
     return url

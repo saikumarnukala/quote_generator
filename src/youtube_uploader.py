@@ -67,14 +67,11 @@ def upload_to_youtube(
     body = {
         "snippet": {
             "title":       shorts_title[:100],
-            "description": (
-                f"{description}\n\n"
-                "#Shorts #quotes #nature #peaceful #motivation #mindfulness"
-            ).strip(),
-            "tags": tags or [
+            "description": description.strip()[:5000],   # YouTube limit: 5000 chars
+            "tags": (tags or [
                 "shorts", "quotes", "nature", "peaceful",
                 "motivation", "mindfulness", "relaxing",
-            ],
+            ])[:500],   # YouTube allows up to 500 chars of tags total
             "categoryId": "22",   # People & Blogs
         },
         "status": {
@@ -99,5 +96,5 @@ def upload_to_youtube(
         raise RuntimeError(f"YouTube upload failed: {response}")
 
     url = f"https://www.youtube.com/watch?v={video_id}"
-    print(f"  YouTube ✓ → {url}")
+    print(f"  YouTube [OK] -> {url}")
     return url

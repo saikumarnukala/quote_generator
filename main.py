@@ -1,4 +1,4 @@
-﻿"""
+"""
 Peaceful Quotes Video Generator
 ================================
 Generates calming AI landscape scenes paired with inspirational quotes
@@ -21,10 +21,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import GROQ_API_KEY, PEXELS_API_KEY, OUTPUT_DIR, TEMP_DIR
-from src.quote_generator import generate_quotes
+from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, OUTPUT_DIR, TEMP_DIR
+from src.quote_generator import generate_quotes, generate_video_metadata
 from src.video_fetcher import fetch_nature_video
 from src.ambient_generator import generate_ambient
+from src.music_fetcher import fetch_trending_music
 from src.video_builder import build_video
 from src.youtube_uploader import upload_to_youtube
 from src.instagram_uploader import upload_to_instagram
@@ -49,6 +50,21 @@ TOPICS = [
     "self-love and acceptance",
     "finding light in darkness",
     "the art of being still",
+    "the beauty of impermanence",
+    "healing through solitude and reflection",
+    "the courage to be vulnerable",
+    "finding wonder in the ordinary",
+    "the rhythm of the universe within us",
+    "surrendering to the flow of life",
+    "the quiet power of gentleness",
+    "ancient wisdom for modern souls",
+    "the sacred art of doing nothing",
+    "finding home within yourself",
+    "the poetry of rain and renewal",
+    "dancing with uncertainty",
+    "the forgotten language of the heart",
+    "moonlight, mystery and inner knowing",
+    "the alchemy of pain into wisdom",
 ]
 
 LANGUAGE_NAMES = {
@@ -59,18 +75,32 @@ LANGUAGE_NAMES = {
     "ja": "Japanese",
 }
 
-JAMENDO_UPLOAD_BLOCK_MESSAGE = (
-    "[ Upload ] Skipped YouTube/Instagram upload.\n"
-    "  Reason: Jamendo music selected. Upload is blocked by default to reduce copyright claims.\n"
-    "  If you own the required Jamendo license/rights, rerun with --allow-jamendo-upload."
-)
-
 
 def _auto_topic() -> str:
-    """Pick a topic that rotates 3 times per day automatically."""
-    slot = datetime.now().hour // 8          # 0 (midnight), 1 (8am), 2 (4pm)
-    idx  = (datetime.now().timetuple().tm_yday * 3 + slot) % len(TOPICS)
-    return TOPICS[idx]
+    """Pick a unique random topic each run, avoiding the last used topic."""
+    last_topic_file = os.path.join(OUTPUT_DIR, ".last_topic")
+    last_topic = None
+    if os.path.exists(last_topic_file):
+        try:
+            with open(last_topic_file, "r", encoding="utf-8") as f:
+                last_topic = f.read().strip()
+        except Exception:
+            pass
+
+    available = [t for t in TOPICS if t != last_topic]
+    if not available:
+        available = TOPICS
+
+    topic = random.choice(available)
+
+    try:
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        with open(last_topic_file, "w", encoding="utf-8") as f:
+            f.write(topic)
+    except Exception:
+        pass
+
+    return topic
 
 
 def _setup_dirs() -> None:
@@ -79,8 +109,17 @@ def _setup_dirs() -> None:
 
 
 def _cleanup_temp() -> None:
+    """Remove temp files, ignoring files still locked by MoviePy on Windows."""
     if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
+        for fname in os.listdir(TEMP_DIR):
+            fpath = os.path.join(TEMP_DIR, fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.unlink(fpath)
+                elif os.path.isdir(fpath):
+                    shutil.rmtree(fpath, ignore_errors=True)
+            except Exception:
+                pass  # File still locked by MoviePy — leave it, harmless
     os.makedirs(TEMP_DIR, exist_ok=True)
 
 
@@ -137,6 +176,14 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     with open(os.path.join(TEMP_DIR, "quotes.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
+    print("        Generating video metadata (title / description / hashtags)...")
+    meta = generate_video_metadata(topic, title, scenes, GROQ_API_KEY, language=language)
+    yt_title   = meta["yt_title"]
+    yt_desc    = meta["description"]
+    yt_tags    = meta["tags"]
+    hashtags   = " ".join(meta["hashtags"])
+    print(f"        YT Title: {yt_title}")
+
     # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
     print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")
     video_paths = []
@@ -146,18 +193,22 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
         search   = scene.get("video_search", scene.get("location", "peaceful nature"))
         fetch_nature_video(search, PEXELS_API_KEY, vid_path)
         video_paths.append(vid_path)
-        print(f"        Scene {i + 1} ✓")
+        print(f"        Scene {i + 1} done")
 
     # ── Step 3 / 3 · Build video ───────────────────────────────────────
     total_duration = SCENE_DURATION * len(scenes)
 
     if not music_path:
-        print("\n[ 3/3 ] Generating ambient music + building video...")
-        ambient_path = os.path.join(TEMP_DIR, "ambient.wav")
-        generate_ambient(total_duration, ambient_path)
-        music_path = ambient_path
+        print("\n[ 3/3 ] Fetching trending music + building video...")
+        music_out = os.path.join(TEMP_DIR, "music")
+        music_info = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out)
+        music_path = music_info["path"]
+        music_track = music_info.get("track_name", "")
+        music_artist = music_info.get("artist_name", "")
+        music_license = music_info.get("license_url", "")
     else:
         print("\n[ 3/3 ] Building video...")
+        music_track = music_artist = music_license = ""
 
     safe   = _safe_filename(title)
     ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -176,23 +227,34 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
 
     print(f"\n{'=' * 55}")
     print(f"  Done!")
-    print(f"  Video    → {output}")
+    print(f"  Video    -> {output}")
     print(f"  Duration ~ {total_duration:.0f}s  ({total_duration / 60:.1f} min)")
     print(f"  Scenes   : {len(scenes)}")
     print(f"{'=' * 55}\n")
 
     # ── Optional: Upload to YouTube & Instagram ────────────────────────
     # Uploads are silently skipped if the required secrets are not set.
-    if jamendo_music and not allow_jamendo_upload:
-        print(JAMENDO_UPLOAD_BLOCK_MESSAGE)
-        return output
 
-    hashtags = "#peaceful #quotes #nature #mindfulness #motivation #shorts"
-    caption  = f"{title}\n\n{hashtags}"
+    # Build copyright attribution block
+    credits_lines = ["\n---\nCredits & Licenses:"]
+    credits_lines.append("Video footage: Pexels (https://www.pexels.com/license/) — free to use, no attribution required.")
+    if music_track and music_artist:
+        credits_lines.append(f'Music: "{music_track}" by {music_artist} — CC Licensed via Jamendo.')
+        if music_license:
+            credits_lines.append(f"License: {music_license}")
+    credits_block = "\n".join(credits_lines)
+
+    yt_desc_full = f"{yt_desc}\n{credits_block}"
+    caption = f"{yt_title}\n\n{yt_desc}\n\n{hashtags}"
 
     print("[ Upload ] Posting to social media...")
     try:
-        yt_url = upload_to_youtube(output, title=title, description=topic)
+        yt_url = upload_to_youtube(
+            output,
+            title=yt_title,
+            description=yt_desc_full,
+            tags=yt_tags,
+        )
     except Exception as e:
         print(f"  YouTube upload failed: {e}")
         yt_url = None
@@ -206,9 +268,9 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     if yt_url or ig_url:
         print(f"\n  Published:")
         if yt_url:
-            print(f"    YouTube  → {yt_url}")
+            print(f"    YouTube  -> {yt_url}")
         if ig_url:
-            print(f"    Instagram→ {ig_url}")
+            print(f"    Instagram-> {ig_url}")
 
     return output
 

@@ -83,11 +83,14 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw    = ImageDraw.Draw(overlay)
 
-    strip_y = height - total_h - 44
-    draw.rectangle([0, strip_y, width, height], fill=(0, 0, 0, 170))
-    draw.line([0, strip_y, width, strip_y], fill=(255, 220, 100, 140), width=2)
+    # Place quote at the TOP so it is not covered by YouTube channel name / controls
+    strip_top    = 0
+    strip_bottom = total_h + pad_v * 2
+    draw.rectangle([0, strip_top, width, strip_bottom], fill=(0, 0, 0, 210))
+    # Decorative gold line at the bottom edge of the strip
+    draw.line([0, strip_bottom, width, strip_bottom], fill=(255, 220, 100, 140), width=2)
 
-    y = strip_y + pad_v
+    y = strip_top + pad_v
     for line in quote_lines:
         try:
             tw = draw.textbbox((0, 0), line, font=font)[2]
@@ -149,18 +152,27 @@ def _fit_to_portrait(clip):
 # =====================================================================
 
 def _colour_grade(frame: np.ndarray) -> np.ndarray:
-    """Warm tint + gentle vignette for a cinematic moody feel."""
+    """Cinematic colour grade — warm highlights, teal shadows, film-like contrast."""
     f = frame.astype(np.float32)
 
-    # Warm tint: boost reds, reduce blues slightly
-    f[:, :, 0] = np.clip(f[:, :, 0] * 1.06, 0, 255)
-    f[:, :, 2] = np.clip(f[:, :, 2] * 0.92, 0, 255)
+    # Lift contrast slightly (S-curve approximation)
+    f = np.clip((f - 128) * 1.08 + 128, 0, 255)
 
-    # Vignette
+    # Warm highlights: boost reds/yellows in bright areas
+    bright_mask = (f.mean(axis=2, keepdims=True) / 255.0)
+    f[:, :, 0] = np.clip(f[:, :, 0] + 6 * bright_mask[:, :, 0], 0, 255)   # red lift
+    f[:, :, 1] = np.clip(f[:, :, 1] + 2 * bright_mask[:, :, 0], 0, 255)   # green slight
+
+    # Teal shadows: push blue/cyan into dark areas
+    shadow_mask = 1.0 - bright_mask
+    f[:, :, 2] = np.clip(f[:, :, 2] + 8 * shadow_mask[:, :, 0], 0, 255)   # blue push
+    f[:, :, 1] = np.clip(f[:, :, 1] + 3 * shadow_mask[:, :, 0], 0, 255)   # green slight
+
+    # Vignette — cinematic edge darkening
     h, w = f.shape[:2]
     ys = np.linspace(-1, 1, h, dtype=np.float32).reshape(-1, 1)
     xs = np.linspace(-1, 1, w, dtype=np.float32).reshape(1, -1)
-    vignette = np.clip(1.0 - 0.35 * (ys**2 + xs**2), 0.55, 1.0)[:, :, np.newaxis]
+    vignette = np.clip(1.0 - 0.40 * (ys**2 + xs**2), 0.50, 1.0)[:, :, np.newaxis]
     f = f * vignette
 
     return np.clip(f, 0, 255).astype(np.uint8)
@@ -245,8 +257,8 @@ def build_video(
         clip = _build_scene_clip(video_paths[i], scene_duration, i, overlay)
         scene_clips.append(clip)
 
-    # Crossfade transitions
-    CROSSFADE = 0.8
+    # Crossfade transitions — longer for smoother cinematic flow
+    CROSSFADE = 1.2
     if len(scene_clips) > 1:
         final = concatenate_videoclips(scene_clips, method="compose", padding=-CROSSFADE)
     else:
@@ -263,6 +275,7 @@ def build_video(
         codec="libx264",
         audio_codec="aac",
         preset="medium",
+        bitrate="8000k",
         threads=4,
         logger="bar",
     )

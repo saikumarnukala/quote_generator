@@ -25,8 +25,8 @@ MIN_H = 720
 
 def _best_file(video_files: list) -> dict | None:
     """
-    Pick the best file: prefer ~1920p HD over 4K for faster processing.
-    Falls back to 4K if nothing smaller is available.
+    Pick the best file: prefer highest quality (4K/UHD) for cinematic look.
+    Falls back to HD if nothing larger is available.
     """
     scored = []
     for f in video_files:
@@ -35,13 +35,12 @@ def _best_file(video_files: list) -> dict | None:
         if w < MIN_W or h < MIN_H:
             continue
         pixels = w * h
-        # Prefer HD (roughly 1080p-1440p range) — faster to process than 4K
-        preference = 0 if pixels <= 1920 * 1080 * 2 else 1
-        scored.append((preference, pixels, f))
+        # Prefer 4K/UHD → HD → smaller (higher pixels = better source quality)
+        scored.append((pixels, f))
     if not scored:
         return None
-    scored.sort(key=lambda x: (x[0], x[1]))
-    return scored[0][2]
+    scored.sort(key=lambda x: x[0], reverse=True)  # biggest first
+    return scored[0][1]
 
 
 def _download(url: str, dest: str, api_key: str) -> bool:
@@ -87,7 +86,7 @@ def _pretranscode(src: str, dest: str) -> bool:
     cmd = [
         _get_ffmpeg(), "-y", "-i", src,
         "-vf", vf,
-        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+        "-c:v", "libx264", "-preset", "medium", "-crf", "18",
         "-c:a", "copy",
         "-loglevel", "error",
         dest,
@@ -118,10 +117,11 @@ def fetch_nature_video(
     headers = {"Authorization": api_key}
 
     all_queries = [search_query] + (fallback_queries or [
-        "peaceful nature",
-        "forest rain",
-        "calm water",
-        "sunrise mountains",
+        "cinematic nature aerial",
+        "4k drone landscape",
+        "slow motion water nature",
+        "golden hour mountains",
+        "misty forest morning",
     ])
 
     for query in all_queries:
@@ -129,7 +129,7 @@ def fetch_nature_video(
             try:
                 params = {
                     "query": query,
-                    "per_page": 15,
+                    "per_page": 40,         # more options for better quality picks
                     "orientation": "portrait",  # prefer 9:16 native
                     "size": "large",
                 }
@@ -166,14 +166,14 @@ def fetch_nature_video(
                         continue
                     url = best["link"]
                     w, h = best.get("width", 0), best.get("height", 0)
-                    print(f"        Downloading: {query!r} → {video.get('id')} ({w}×{h})")
+                    print(f"        Downloading: {query!r} -> {video.get('id')} ({w}x{h})")
                     # Download to a temp path, then pre-transcode to target resolution
                     raw_path = output_path + ".raw.mp4"
                     if _download(url, raw_path, api_key):
-                        print(f"          Pre-transcoding to 1080×1920 …", end=" ", flush=True)
+                        print(f"          Pre-transcoding to 1080x1920 ...", end=" ", flush=True)
                         if _pretranscode(raw_path, output_path):
                             os.remove(raw_path)
-                            print("✓")
+                            print("done")
                         else:
                             # FFmpeg not available — use raw file as-is
                             os.replace(raw_path, output_path)
