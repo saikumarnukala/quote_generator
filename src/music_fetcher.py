@@ -81,7 +81,11 @@ def fetch_trending_music(
     _empty_attr = {"path": "", "track_name": "", "artist_name": "", "license_url": ""}
 
     if not client_id:
-        print("        JAMENDO_CLIENT_ID not set — using synthesized ambient music.")
+        print("        JAMENDO_CLIENT_ID not set — trying Internet Archive CC music...")
+        ia_path = _fetch_from_internet_archive(topic, duration, output_path)
+        if ia_path:
+            return {**_empty_attr, "path": ia_path}
+        print("        Internet Archive also unavailable — using synthesized ambient.")
         return {**_empty_attr, "path": _fallback_ambient(duration, output_path)}
 
     tags = _tags_for_topic(topic)
@@ -90,7 +94,11 @@ def fetch_trending_music(
     try:
         track_url, track_name, artist, license_url = _find_track(client_id, tags, duration)
     except Exception as e:
-        print(f"        Jamendo search failed ({e}) — using synthesized ambient music.")
+        print(f"        Jamendo search failed ({e}) — trying Internet Archive CC music...")
+        ia_path = _fetch_from_internet_archive(topic, duration, output_path)
+        if ia_path:
+            return {**_empty_attr, "path": ia_path}
+        print("        Internet Archive also unavailable — using synthesized ambient.")
         return {**_empty_attr, "path": _fallback_ambient(duration, output_path)}
 
     print(f"        Music   : '{track_name}' by {artist}")
@@ -102,7 +110,11 @@ def fetch_trending_music(
     try:
         _download(track_url, mp3_path)
     except Exception as e:
-        print(f"        Jamendo download failed ({e}) — using synthesized ambient music.")
+        print(f"        Jamendo download failed ({e}) — trying Internet Archive CC music...")
+        ia_path = _fetch_from_internet_archive(topic, duration, output_path)
+        if ia_path:
+            return {**_empty_attr, "path": ia_path}
+        print("        Internet Archive also unavailable — using synthesized ambient.")
         return {**_empty_attr, "path": _fallback_ambient(duration, output_path)}
 
     return {
@@ -251,6 +263,95 @@ def _download(url: str, dest: str) -> None:
     with open(dest, "wb") as fh:
         for chunk in resp.iter_content(chunk_size=65536):
             fh.write(chunk)
+
+
+def _fetch_from_internet_archive(topic: str, min_duration: float, output_path: str) -> str | None:
+    """
+    Download a CC-licensed instrumental track from Internet Archive — no API key needed.
+
+    Searches for CC-licensed audio matching the topic mood, picks from the most-downloaded
+    results, then streams the first MP3 long enough to cover the video.
+    Returns the local mp3 path on success, None on any failure.
+    """
+    mood_tag = _tags_for_topic(topic)
+    print(f"        Searching Internet Archive for CC music (tag: {mood_tag!r})...")
+
+    try:
+        resp = requests.get(
+            "https://archive.org/advancedsearch.php",
+            params={
+                "q": (
+                    f"mediatype:audio subject:instrumental {mood_tag} "
+                    "licenseurl:creativecommons.org"
+                ),
+                "fl": "identifier,title,creator",
+                "sort[]": "downloads desc",
+                "rows": 20,
+                "page": 1,
+                "output": "json",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        docs = resp.json().get("response", {}).get("docs", [])
+    except Exception as e:
+        print(f"        Internet Archive search failed ({e})")
+        return None
+
+    if not docs:
+        # Broaden search — no mood tag, just CC instrumental audio
+        try:
+            resp = requests.get(
+                "https://archive.org/advancedsearch.php",
+                params={
+                    "q": "mediatype:audio subject:instrumental licenseurl:creativecommons.org",
+                    "fl": "identifier,title,creator",
+                    "sort[]": "downloads desc",
+                    "rows": 20,
+                    "page": 1,
+                    "output": "json",
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            docs = resp.json().get("response", {}).get("docs", [])
+        except Exception:
+            return None
+
+    top = docs[:10]
+    random.shuffle(top)
+
+    for doc in top:
+        identifier = doc.get("identifier", "")
+        if not identifier:
+            continue
+        try:
+            meta = requests.get(
+                f"https://archive.org/metadata/{identifier}",
+                timeout=15,
+            )
+            meta.raise_for_status()
+            files = meta.json().get("files", [])
+            # `length` in Archive.org file metadata is duration in seconds (as string)
+            mp3s = [
+                f for f in files
+                if f.get("name", "").lower().endswith(".mp3")
+                and float(f.get("length") or 0) >= min(min_duration, 30)
+            ]
+            if not mp3s:
+                continue
+            selected = mp3s[0]
+            url = f"https://archive.org/download/{identifier}/{selected['name']}"
+            mp3_out = os.path.splitext(output_path)[0] + ".mp3"
+            print(f"        Downloading: '{doc.get('title', identifier)}' (Internet Archive CC)...")
+            _download(url, mp3_out)
+            print(f"        Music   : '{doc.get('title', identifier)}' by {doc.get('creator', 'Unknown')}")
+            print(f"        License : https://creativecommons.org/licenses/")
+            return mp3_out
+        except Exception:
+            continue
+
+    return None
 
 
 def _fallback_ambient(duration: float, output_path: str) -> str:

@@ -18,8 +18,8 @@ import time
 
 import requests
 
-GRAPH_BASE  = "https://graph.facebook.com/v19.0"
-UPLOAD_BASE = "https://rupload.facebook.com/video-upload/v19.0"
+GRAPH_BASE  = "https://graph.facebook.com/v22.0"
+UPLOAD_BASE = "https://rupload.facebook.com/video-upload/v22.0"
 
 INSTAGRAM_USER_ID      = os.getenv("INSTAGRAM_USER_ID")
 INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
