@@ -278,6 +278,17 @@ def build_video(
         bitrate="8000k",
         threads=4,
         logger="bar",
+        # Instagram / YouTube Shorts requirements:
+        #   - yuv420p pixel format (Instagram rejects yuva420p / other formats)
+        #   - H.264 High profile level 4.0 (broadly compatible)
+        #   - Stereo AAC audio at 44100 Hz
+        ffmpeg_params=[
+            "-pix_fmt", "yuv420p",
+            "-profile:v", "high",
+            "-level:v", "4.0",
+            "-ar", "44100",
+            "-ac", "2",
+        ],
     )
 
     for c in scene_clips:
