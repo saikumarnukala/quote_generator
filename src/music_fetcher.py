@@ -159,21 +159,22 @@ def _find_track(client_id: str, tags: str, min_duration: float, used_ids: set | 
     offset = random.randint(0, 20)
 
     base_params = {
-        "client_id":       client_id,
-        "format":          "json",
-        "limit":           30,
-        "audiodlformat":   "mp32",
-        "boost":           "popularity_total",
-        "include":         "musicinfo+licenses",
-        "order":           order,
-        "content_id_free": True,
+        "client_id":     client_id,
+        "format":        "json",
+        "limit":         50,           # fetch more candidates so filters have enough to work with
+        "audiodlformat": "mp32",
+        "boost":         "popularity_total",
+        "include":       "musicinfo+licenses",
+        "order":         order,
+        # NOTE: content_id_free removed — it cuts the pool too aggressively and most
+        # CC-BY tracks are fine for YouTube. We still filter by license below.
     }
 
     # --- Attempt 1: fuzzytags search (broader than strict tags) -----------
     params = {
         **base_params,
-        "fuzzytags":     tags,
-        "offset":        offset,
+        "fuzzytags": tags,
+        "offset":    offset,
     }
     tracks = _query_jamendo(params, min_duration)
 
@@ -209,28 +210,22 @@ def _find_track(client_id: str, tags: str, min_duration: float, used_ids: set | 
     if not tracks:
         raise ValueError("No tracks found on Jamendo")
 
-    # Pick from TOP 10 most popular results (not a random shuffle of all 30)
-    top_tracks = tracks[:10]
-    random.shuffle(top_tracks)
+    # Shuffle all results for variety (was: only top 10)
+    random.shuffle(tracks)
 
     _skip = used_ids or set()
     track = None
-    for candidate in top_tracks:
+    for candidate in tracks:
         # Skip tracks used in previous runs
         if str(candidate.get("id", "")) in _skip:
             continue
-        # Skip tracks that disallow downloads
-        if not candidate.get("audiodownload_allowed", True):
-            continue
-        # Only allow CC BY and CC0 licenses:
-        #   - CC BY-NC / CC BY-ND / CC BY-NC-ND : block commercial/derivative use
-        #   - CC BY-SA : ShareAlike conflicts with YouTube monetisation (proprietary)
-        #   - Empty license string       : unknown — skip to be safe
+        # Only allow CC BY and CC0 licenses — block NC/ND/SA
         lic = candidate.get("license_ccurl", "").lower()
         if not lic:
             continue  # unknown license — skip
         if "-nc" in lic or "-nd" in lic or "-sa" in lic:
             continue
+        # Prefer direct download URL; fall back to streaming URL
         url = candidate.get("audiodownload", "").strip()
         if not url or not url.startswith("http"):
             url = candidate.get("audio", "").strip()
