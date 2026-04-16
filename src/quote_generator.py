@@ -125,7 +125,7 @@ Sample quotes:
 Return ONLY valid JSON — no markdown, no extra text:
 {{
   "yt_title": "A punchy YouTube title under 90 characters. Must include #Shorts. Make it emotionally compelling and searchable.",
-  "description": "A 3-paragraph YouTube video description. Paragraph 1: Hook — 1-2 compelling sentences about the video theme. Paragraph 2: What viewers will feel/gain. Paragraph 3: Call to action (subscribe, like, comment their favourite quote). End with the full hashtag block on its own line.",
+  "description": "A 3-paragraph YouTube video description. Paragraph 1: Hook — 1-2 compelling sentences about the video theme. Paragraph 2: What viewers will feel/gain. Paragraph 3: Call to action — ask viewers to subscribe to @silent_mind_talks, like, and comment their favourite quote. End with the full hashtag block on its own line.",
   "hashtags": ["list", "of", "25", "to", "30", "hashtags", "each", "with", "#", "include", "niche", "and", "broad", "tags"],
   "tags": ["plain", "tag", "words", "for", "YouTube", "API", "15", "to", "20", "items"]
 }}
@@ -164,7 +164,7 @@ Rules:
         meta["description"] = (
             f"{topic.capitalize()} — a peaceful video to calm your mind and uplift your spirit.\n\n"
             "Take a breath, slow down, and let these words guide you.\n\n"
-            "Like & Subscribe for daily peaceful quotes. Drop your favourite quote in the comments!"
+            "Like & Subscribe to @silent_mind_talks for daily peaceful quotes. Drop your favourite quote in the comments!"
         )
 
     if not meta.get("hashtags"):
