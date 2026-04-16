@@ -1,5 +1,21 @@
 {
-  "quotes": [],
-  "video_ids": [],
+  "quotes": [
+    "The wound is the place where the light enters you.",
+    "Nature does not hurry, yet everything is accomplished.",
+    "The universe is change; our life is what our thoughts make it.",
+    "The earth has music for those who listen.",
+    "The trees are our elders, they have seen it all.",
+    "The snowflake falls, and the flower blooms, each in its own time.",
+    "In the depth of winter, I finally learned that within me there lay an invincible summer."
+  ],
+  "video_ids": [
+    19857367,
+    30992167,
+    32270792,
+    35026615,
+    35065518,
+    33967197,
+    7815054
+  ],
   "music_ids": []
 }
