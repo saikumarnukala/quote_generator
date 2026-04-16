@@ -233,6 +233,9 @@ if __name__ == "__main__":
                         help="Allow auto-upload when using Jamendo music (only if you have proper rights/license)")
     args = parser.parse_args()
 
+    if args.jamendo_music and not args.music:
+        parser.error("--jamendo-music requires --music <path>")
+
     _topic = " ".join(args.topic).strip() if args.topic else None
 
     run(
