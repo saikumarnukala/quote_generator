@@ -17,7 +17,8 @@ LANGUAGE_NAMES = {
 }
 
 
-def generate_quotes(topic: str, api_key: str, num_scenes: int = 7, language: str = "en") -> dict:
+def generate_quotes(topic: str, api_key: str, num_scenes: int = 7, language: str = "en",
+                    used_quotes: list[str] | None = None) -> dict:
     """
     Generate peaceful location scenes + inspirational quotes via Groq Llama 3.3 70B.
 
@@ -40,8 +41,20 @@ def generate_quotes(topic: str, api_key: str, num_scenes: int = 7, language: str
     client = Groq(api_key=api_key)
     lang_name = LANGUAGE_NAMES.get(language, "English")
 
-    prompt = f"""You are a world-class screenwriter creating a short cinematic meditation film about: "{topic}"
+    # Build forbidden-quotes block so the LLM never repeats them
+    forbidden_block = ""
+    if used_quotes:
+        # Send the most recent 80 to keep the prompt manageable
+        recent = used_quotes[-80:]
+        forbidden_list = "\n".join(f'  - "{q}"' for q in recent)
+        forbidden_block = (
+            f"\n\nFORBIDDEN — do NOT use these quotes (already used in previous videos):\n"
+            f"{forbidden_list}\n"
+            f"Every quote MUST be completely different from the above list.\n"
+        )
 
+    prompt = f"""You are a world-class screenwriter creating a short cinematic meditation film about: "{topic}"
+{forbidden_block}
 Generate exactly {num_scenes} visually stunning scenes. Return ONLY valid JSON — no markdown, no extra text.
 
 {{

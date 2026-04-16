@@ -106,15 +106,18 @@ def fetch_nature_video(
     output_path: str,
     fallback_queries: list[str] | None = None,
     retries: int = 3,
-) -> str:
+    used_ids: set | None = None,
+) -> tuple[str, int]:
     """
     Search Pexels for a nature clip matching `search_query`,
     download the best quality file to `output_path`.
 
     Falls back to `fallback_queries` if no results found.
-    Returns output_path on success, raises RuntimeError on failure.
+    Skips any Pexels video IDs in `used_ids` to avoid repeats across runs.
+    Returns (output_path, video_id) on success, raises RuntimeError on failure.
     """
     headers = {"Authorization": api_key}
+    _used = used_ids or set()
 
     all_queries = [search_query] + (fallback_queries or [
         "cinematic nature aerial",
@@ -161,12 +164,15 @@ def fetch_nature_video(
                 random.shuffle(videos)
 
                 for video in videos:
+                    vid_id = video.get("id", 0)
+                    if vid_id in _used:
+                        continue  # already used in a previous run — skip
                     best = _best_file(video.get("video_files", []))
                     if best is None:
                         continue
                     url = best["link"]
                     w, h = best.get("width", 0), best.get("height", 0)
-                    print(f"        Downloading: {query!r} -> {video.get('id')} ({w}x{h})")
+                    print(f"        Downloading: {query!r} -> {vid_id} ({w}x{h})")
                     # Download to a temp path, then pre-transcode to target resolution
                     raw_path = output_path + ".raw.mp4"
                     if _download(url, raw_path, api_key):
@@ -178,7 +184,7 @@ def fetch_nature_video(
                             # FFmpeg not available — use raw file as-is
                             os.replace(raw_path, output_path)
                             print("(FFmpeg unavailable, using raw)")
-                        return output_path
+                        return output_path, vid_id
 
             except (requests.exceptions.Timeout,
                     requests.exceptions.ConnectionError) as e:

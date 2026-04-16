@@ -60,6 +60,7 @@ def fetch_trending_music(
     client_id: str,
     duration: float,
     output_path: str,
+    used_ids: set | None = None,
 ) -> dict:
     """
     Download a trending CC-licensed music track from Jamendo that matches
@@ -70,6 +71,7 @@ def fetch_trending_music(
         client_id:   Jamendo API client ID (free — register at jamendo.com).
         duration:    Required minimum track duration in seconds.
         output_path: Destination path for the downloaded audio (.mp3).
+        used_ids:    Set of Jamendo track IDs (as strings) to skip — avoids repeats.
 
     Returns:
         dict with keys:
@@ -77,8 +79,10 @@ def fetch_trending_music(
           "track_name"  — track title (empty string for fallback)
           "artist_name" — artist name (empty string for fallback)
           "license_url" — Creative Commons license URL (empty for fallback)
+          "track_id"    — Jamendo track ID string (empty for fallback)
     """
-    _empty_attr = {"path": "", "track_name": "", "artist_name": "", "license_url": ""}
+    _used = used_ids or set()
+    _empty_attr = {"path": "", "track_name": "", "artist_name": "", "license_url": "", "track_id": ""}
 
     if not client_id:
         print("        JAMENDO_CLIENT_ID not set — trying Internet Archive CC music...")
@@ -92,7 +96,7 @@ def fetch_trending_music(
     print(f"        Searching Jamendo for trending music (tags: {tags!r})...")
 
     try:
-        track_url, track_name, artist, license_url = _find_track(client_id, tags, duration)
+        track_url, track_name, artist, license_url, track_id = _find_track(client_id, tags, duration, _used)
     except Exception as e:
         print(f"        Jamendo search failed ({e}) — trying Internet Archive CC music...")
         ia_path = _fetch_from_internet_archive(topic, duration, output_path)
@@ -122,6 +126,7 @@ def fetch_trending_music(
         "track_name": track_name,
         "artist_name": artist,
         "license_url": license_url,
+        "track_id": str(track_id),
     }
 
 
@@ -137,7 +142,7 @@ _ORDER_OPTIONS = [
 ]
 
 
-def _find_track(client_id: str, tags: str, min_duration: float):
+def _find_track(client_id: str, tags: str, min_duration: float, used_ids: set | None = None):
     """Query Jamendo and return (download_url, track_name, artist_name).
 
     Strategy:
@@ -208,8 +213,12 @@ def _find_track(client_id: str, tags: str, min_duration: float):
     top_tracks = tracks[:10]
     random.shuffle(top_tracks)
 
+    _skip = used_ids or set()
     track = None
     for candidate in top_tracks:
+        # Skip tracks used in previous runs
+        if str(candidate.get("id", "")) in _skip:
+            continue
         # Skip tracks that disallow downloads
         if not candidate.get("audiodownload_allowed", True):
             continue
@@ -238,6 +247,7 @@ def _find_track(client_id: str, tags: str, min_duration: float):
         track.get("name", "unknown"),
         track.get("artist_name", "unknown"),
         track.get("license_ccurl", ""),
+        str(track.get("id", "")),
     )
 
 

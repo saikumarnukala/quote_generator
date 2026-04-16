@@ -29,6 +29,7 @@ from src.music_fetcher import fetch_trending_music
 from src.video_builder import build_video
 from src.youtube_uploader import upload_to_youtube
 from src.instagram_uploader import upload_to_instagram
+from src.history import get_used_quotes, get_used_video_ids, get_used_music_ids, record_run
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,13 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
 
     # ── Step 1 / 3 · Generate quotes & scene descriptions ─────────────
     print("[ 1/3 ] Generating quotes & peaceful scenes (Groq)...")
-    data     = generate_quotes(topic, GROQ_API_KEY, num_scenes=num_scenes, language=language)
+    used_quotes    = get_used_quotes()
+    used_video_ids = get_used_video_ids()
+    used_music_ids = get_used_music_ids()
+    print(f"        History : {len(used_quotes)} quotes, {len(used_video_ids)} videos, {len(used_music_ids)} tracks already used")
+
+    data     = generate_quotes(topic, GROQ_API_KEY, num_scenes=num_scenes, language=language,
+                               used_quotes=used_quotes)
     scenes   = data["scenes"]
     title    = data["title"]
     print(f"        Title  : {title}")
@@ -187,12 +194,19 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
     print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")
     video_paths = []
+    this_run_video_ids = []
     for i, scene in enumerate(scenes):
         print(f"        Scene {i + 1}/{len(scenes)}...")
         vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.mp4")
         search   = scene.get("video_search", scene.get("location", "peaceful nature"))
-        fetch_nature_video(search, PEXELS_API_KEY, vid_path)
-        video_paths.append(vid_path)
+        vid_path_result, vid_id = fetch_nature_video(
+            search, PEXELS_API_KEY, vid_path,
+            used_ids=used_video_ids | set(this_run_video_ids),  # avoid dups within a run too
+        )
+        video_paths.append(vid_path_result)
+        if vid_id:
+            this_run_video_ids.append(vid_id)
+            used_video_ids.add(vid_id)   # prevent same ID later in same run
         print(f"        Scene {i + 1} done")
 
     # ── Step 3 / 3 · Build video ───────────────────────────────────────
@@ -203,14 +217,16 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     if not music_path:
         print("\n[ 3/3 ] Fetching trending music + building video...")
         music_out = os.path.join(TEMP_DIR, "music")
-        music_info = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out)
+        music_info = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out,
+                                          used_ids=used_music_ids)
         music_path = music_info["path"]
         music_track = music_info.get("track_name", "")
         music_artist = music_info.get("artist_name", "")
         music_license = music_info.get("license_url", "")
+        music_id = music_info.get("track_id", "")
     else:
         print("\n[ 3/3 ] Building video...")
-        music_track = music_artist = music_license = ""
+        music_track = music_artist = music_license = music_id = ""
 
     safe   = _safe_filename(title)
     ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -226,6 +242,14 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     )
 
     _cleanup_temp()
+
+    # ── Record what we used so future runs produce fresh content ─────────
+    this_run_quotes = [s.get("quote", "") for s in scenes]
+    record_run(
+        quotes    = this_run_quotes,
+        video_ids = this_run_video_ids,
+        music_id  = music_id or None,
+    )
 
     print(f"\n{'=' * 55}")
     print(f"  Done!")
