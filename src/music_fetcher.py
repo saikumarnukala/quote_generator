@@ -201,6 +201,15 @@ def _find_track(client_id: str, tags: str, min_duration: float):
         # Skip tracks that disallow downloads
         if not candidate.get("audiodownload_allowed", True):
             continue
+        # Only allow CC BY and CC0 licenses:
+        #   - CC BY-NC / CC BY-ND / CC BY-NC-ND : block commercial/derivative use
+        #   - CC BY-SA : ShareAlike conflicts with YouTube monetisation (proprietary)
+        #   - Empty license string       : unknown — skip to be safe
+        lic = candidate.get("license_ccurl", "").lower()
+        if not lic:
+            continue  # unknown license — skip
+        if "-nc" in lic or "-nd" in lic or "-sa" in lic:
+            continue
         url = candidate.get("audiodownload", "").strip()
         if not url or not url.startswith("http"):
             url = candidate.get("audio", "").strip()

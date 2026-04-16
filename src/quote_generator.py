@@ -52,7 +52,7 @@ Generate exactly {num_scenes} visually stunning scenes. Return ONLY valid JSON �
       "location": "short beautiful location name in {lang_name}",
       "video_search": "3-5 hyper-specific English words for Pexels search — cinematic quality",
       "quote": "a deeply moving, soul-stirring quote in {lang_name}",
-      "author": "Real person name, or 'Ancient Wisdom', or 'Unknown'",
+      "author": "ONLY public-domain authors (died before 1928) such as Rumi, Lao Tzu, Marcus Aurelius, Khalil Gibran, Rabindranath Tagore, Walt Whitman, Nikola Tesla, Abraham Lincoln, Epictetus, Seneca — OR use 'Ancient Wisdom' / 'Unknown'. NEVER use living authors or anyone who died after 1927.",
       "narration": "2-3 sentences in {lang_name} — poetic, intimate, like a whisper to the soul"
     }}
   ]
@@ -64,11 +64,14 @@ Rules:
   BAD: "nature", "peaceful video", "nice scenery"
 - All other fields (title, location, quote, author, narration) MUST be in {lang_name}
 - Quotes: Mix these styles across scenes:
-  * Profound philosophical wisdom (Rumi, Lao Tzu, Marcus Aurelius calibre)
+  * Profound philosophical wisdom (Rumi, Lao Tzu, Marcus Aurelius, Seneca, Epictetus)
   * Raw emotional truth that hits the heart
   * Poetic metaphors about life, nature, and the human spirit
   * Short powerful one-liners that linger in the mind
 - NO generic motivational clichés — every quote must feel like it was written by a poet
+- CRITICAL copyright rule: author field must ONLY be a person who died before 1928 (public domain),
+  or the literal string 'Ancient Wisdom' or 'Unknown'. NEVER attribute quotes to Maya Angelou,
+  Paulo Coelho, Eckhart Tolle, Brené Brown, or any other living or recently deceased author.
 - video_search: Use CINEMATIC search terms — aerial shots, golden hour, slow motion, timelapse, macro close-up, drone footage, 4k nature
   Vary across: misty mountains, bioluminescent ocean, northern lights, cherry blossom snowfall, volcanic landscape, underwater cave, dense rainforest canopy, ice cave glacier, desert sand dunes sunset, fireflies forest night
 - Each scene should feel like a breathtaking moment frozen in time

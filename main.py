@@ -198,6 +198,8 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     # ── Step 3 / 3 · Build video ───────────────────────────────────────
     total_duration = SCENE_DURATION * len(scenes)
 
+    user_provided_music = music_path is not None  # remember before the path may be overwritten
+
     if not music_path:
         print("\n[ 3/3 ] Fetching trending music + building video...")
         music_out = os.path.join(TEMP_DIR, "music")
@@ -235,6 +237,16 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     # ── Optional: Upload to YouTube & Instagram ────────────────────────
     # Uploads are silently skipped if the required secrets are not set.
 
+    # Determine whether Jamendo music is in use:
+    #   - auto-fetched: music_track is non-empty (empty only on fallback ambient)
+    #   - user-supplied + --jamendo-music flag: jamendo_music=True
+    used_jamendo = bool(music_track) or jamendo_music
+
+    # Warn when a custom music file is provided without any license declaration
+    if user_provided_music and not jamendo_music:
+        print("  [Copyright] Warning: custom music file provided without license info.")
+        print("              Ensure you hold the necessary rights before uploading this video.")
+
     # Build copyright attribution block
     credits_lines = ["\n---\nCredits & Licenses:"]
     credits_lines.append("Video footage: Pexels (https://www.pexels.com/license/) — free to use, no attribution required.")
@@ -245,7 +257,14 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     credits_block = "\n".join(credits_lines)
 
     yt_desc_full = f"{yt_desc}\n{credits_block}"
-    caption = f"{yt_title}\n\n{yt_desc}\n\n{hashtags}"
+    # Include credits in Instagram caption as well
+    caption = f"{yt_title}\n\n{yt_desc}\n\n{credits_block}\n\n{hashtags}"
+
+    # Enforce Jamendo upload gate — require explicit consent before posting
+    if used_jamendo and not allow_jamendo_upload:
+        print("  [Copyright] Uploads skipped — Jamendo CC music detected.")
+        print("              Re-run with --allow-jamendo-upload once you confirm compliance with the CC license terms.")
+        return output
 
     print("[ Upload ] Posting to social media...")
     try:
