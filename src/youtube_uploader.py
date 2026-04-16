@@ -11,6 +11,7 @@ Note: For a video to appear as a YouTube Short it must be ≤60 seconds AND 9:16
 """
 
 import os
+import time
 
 YT_CLIENT_ID      = os.getenv("YT_CLIENT_ID")
 YT_CLIENT_SECRET  = os.getenv("YT_CLIENT_SECRET")
@@ -80,7 +81,7 @@ def upload_to_youtube(
         },
     }
 
-    media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
+    media = MediaFileUpload(video_path, chunksize=10 * 1024 * 1024, resumable=True)
     request = youtube.videos().insert(
         part=",".join(body.keys()),
         body=body,
@@ -88,8 +89,16 @@ def upload_to_youtube(
     )
 
     response = None
+    retry_count = 0
     while response is None:
-        _, response = request.next_chunk()
+        try:
+            _, response = request.next_chunk()
+        except Exception as e:
+            retry_count += 1
+            if retry_count > 5:
+                raise
+            print(f"  YouTube chunk error (attempt {retry_count}/5): {e} — retrying in 10s...")
+            time.sleep(10)
 
     video_id = response.get("id")
     if not video_id:
