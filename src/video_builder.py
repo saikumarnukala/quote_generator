@@ -86,7 +86,7 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
     # Place quote at the TOP so it is not covered by YouTube channel name / controls
     strip_top    = 0
     strip_bottom = total_h + pad_v * 2
-    draw.rectangle([0, strip_top, width, strip_bottom], fill=(0, 0, 0, 160))
+    draw.rectangle([0, strip_top, width, strip_bottom], fill=(0, 0, 0, 210))
     # Decorative gold line at the bottom edge of the strip
     draw.line([0, strip_bottom, width, strip_bottom], fill=(255, 220, 100, 140), width=2)
 

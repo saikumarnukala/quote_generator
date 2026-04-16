@@ -199,9 +199,14 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     if not music_path:
         print("\n[ 3/3 ] Fetching trending music + building video...")
         music_out = os.path.join(TEMP_DIR, "music")
-        music_path = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out)
+        music_info = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out)
+        music_path = music_info["path"]
+        music_track = music_info.get("track_name", "")
+        music_artist = music_info.get("artist_name", "")
+        music_license = music_info.get("license_url", "")
     else:
         print("\n[ 3/3 ] Building video...")
+        music_track = music_artist = music_license = ""
 
     safe   = _safe_filename(title)
     ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -227,6 +232,17 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
 
     # ── Optional: Upload to YouTube & Instagram ────────────────────────
     # Uploads are silently skipped if the required secrets are not set.
+
+    # Build copyright attribution block
+    credits_lines = ["\n---\nCredits & Licenses:"]
+    credits_lines.append("Video footage: Pexels (https://www.pexels.com/license/) — free to use, no attribution required.")
+    if music_track and music_artist:
+        credits_lines.append(f'Music: "{music_track}" by {music_artist} — CC Licensed via Jamendo.')
+        if music_license:
+            credits_lines.append(f"License: {music_license}")
+    credits_block = "\n".join(credits_lines)
+
+    yt_desc_full = f"{yt_desc}\n{credits_block}"
     caption = f"{yt_title}\n\n{yt_desc}\n\n{hashtags}"
 
     print("[ Upload ] Posting to social media...")
@@ -234,7 +250,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
         yt_url = upload_to_youtube(
             output,
             title=yt_title,
-            description=yt_desc,
+            description=yt_desc_full,
             tags=yt_tags,
         )
     except Exception as e:
