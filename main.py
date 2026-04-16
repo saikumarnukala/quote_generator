@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, OUTPUT_DIR, TEMP_DIR
+from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, PIXABAY_API_KEY, OUTPUT_DIR, TEMP_DIR
 from src.quote_generator import generate_quotes, generate_video_metadata
 from src.video_fetcher import fetch_nature_video
 from src.ambient_generator import generate_ambient
@@ -335,6 +335,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
             music_info = fetch_trending_music(
                 topic, JAMENDO_CLIENT_ID, total_duration, music_out,
                 used_ids=skip_music,
+                pixabay_api_key=PIXABAY_API_KEY,
             )
             # ── Copyright check: music ────────────────────────────────
             ok, reason = check_music(music_info)
