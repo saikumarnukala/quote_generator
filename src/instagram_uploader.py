@@ -14,6 +14,9 @@ How to get these:
 """
 
 import os
+import shutil
+import subprocess
+import tempfile
 import time
 
 import requests
@@ -40,11 +43,62 @@ def _refresh_token(token: str) -> str:
     return token
 
 
+def _transcode_for_instagram(src: str) -> tuple[str, bool]:
+    """
+    Re-encode *src* with Instagram-safe FFmpeg settings.
+
+    Returns (path, is_temp) where is_temp=True means the caller must delete the file.
+    Falls back to (src, False) if FFmpeg is unavailable or fails.
+
+    Key settings that prevent ProcessingFailedError:
+      - yuv420p            : no alpha channel
+      - cfr 30fps          : constant frame rate (VFR silently rejected by Meta)
+      - movflags faststart : moov atom at start (required for streaming/processing)
+      - H.264 baseline 3.1: broadest decoder compatibility on Meta's servers
+      - AAC stereo 44100   : required audio spec
+    """
+    ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    tmp = tempfile.mktemp(suffix="_ig.mp4")
+    cmd = [
+        ffmpeg, "-y", "-i", src,
+        "-c:v",       "libx264",
+        "-profile:v", "baseline",
+        "-level:v",   "3.1",
+        "-pix_fmt",   "yuv420p",
+        "-r",         "30",
+        "-vsync",     "cfr",
+        "-b:v",       "3500k",
+        "-maxrate",   "3500k",
+        "-bufsize",   "7000k",
+        "-c:a",       "aac",
+        "-ar",        "44100",
+        "-ac",        "2",
+        "-b:a",       "128k",
+        "-movflags",  "+faststart",
+        "-loglevel",  "error",
+        tmp,
+    ]
+    try:
+        result = subprocess.run(cmd, timeout=300, capture_output=True)
+        if result.returncode == 0 and os.path.getsize(tmp) > 10_000:
+            print("  Instagram: re-encoded for compliance (baseline H.264, CFR, faststart).")
+            return tmp, True
+        print(f"  Instagram: FFmpeg transcode failed (rc={result.returncode}), uploading original.")
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    except Exception as e:
+        print(f"  Instagram: FFmpeg transcode error ({e}), uploading original.")
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+    return src, False
+
+
 def upload_to_instagram(video_path: str, caption: str) -> str | None:
     """
     Upload *video_path* as an Instagram Reel using the resumable upload API.
 
     Flow:
+        0. Re-encode to Instagram-safe format (baseline H.264, CFR, faststart)
         1. Create upload session (POST /media with upload_type=resumable)
         2. Stream video bytes to the returned upload URI
         3. Poll container status until FINISHED
@@ -61,7 +115,9 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     token = _refresh_token(INSTAGRAM_ACCESS_TOKEN)
     print("  Uploading to Instagram Reels...")
 
-    file_size = os.path.getsize(video_path)
+    # Re-encode with guaranteed-compliant settings before upload
+    upload_path, is_temp = _transcode_for_instagram(video_path)
+    file_size = os.path.getsize(upload_path)
 
     # ── Step 1: Create upload session ─────────────────────────────────
     r = requests.post(
@@ -76,6 +132,8 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
         timeout=30,
     )
     if r.status_code != 200:
+        if is_temp and os.path.exists(upload_path):
+            os.unlink(upload_path)
         raise RuntimeError(f"Instagram: failed to create upload session: {r.text}")
 
     resp_data    = r.json()
@@ -83,10 +141,12 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     upload_uri   = resp_data.get("uri")
 
     if not container_id or not upload_uri:
+        if is_temp and os.path.exists(upload_path):
+            os.unlink(upload_path)
         raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
 
     # ── Step 2: Stream video bytes ────────────────────────────────────
-    with open(video_path, "rb") as fh:
+    with open(upload_path, "rb") as fh:
         up = requests.post(
             upload_uri,
             headers={
@@ -98,6 +158,8 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
             data=fh,
             timeout=300,
         )
+    if is_temp and os.path.exists(upload_path):
+        os.unlink(upload_path)
     if up.status_code not in (200, 201):
         raise RuntimeError(f"Instagram: video upload failed ({up.status_code}): {up.text}")
 

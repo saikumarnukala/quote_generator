@@ -282,12 +282,17 @@ def build_video(
         #   - yuv420p pixel format (Instagram rejects yuva420p / other formats)
         #   - H.264 High profile level 4.0 (broadly compatible)
         #   - Stereo AAC audio at 44100 Hz
+        #   - movflags faststart: moov atom at file start (required by Meta's transcoder)
+        #   - vsync cfr: constant frame rate (VFR causes ProcessingFailedError on Instagram)
         ffmpeg_params=[
-            "-pix_fmt", "yuv420p",
-            "-profile:v", "high",
-            "-level:v", "4.0",
-            "-ar", "44100",
-            "-ac", "2",
+            "-pix_fmt",     "yuv420p",
+            "-profile:v",   "high",
+            "-level:v",     "4.0",
+            "-r",           str(FPS),
+            "-vsync",       "cfr",
+            "-ar",          "44100",
+            "-ac",          "2",
+            "-movflags",    "+faststart",
         ],
     )
 
