@@ -30,6 +30,7 @@ from src.video_builder import build_video
 from src.youtube_uploader import upload_to_youtube
 from src.instagram_uploader import upload_to_instagram
 from src.history import get_used_quotes, get_used_video_ids, get_used_music_ids, record_run
+from src.copyright_checker import check_music, check_videos
 
 
 # ---------------------------------------------------------------------------
@@ -209,25 +210,77 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
             used_video_ids.add(vid_id)   # prevent same ID later in same run
         print(f"        Scene {i + 1} done")
 
-    # ── Step 3 / 3 · Build video ───────────────────────────────────────
+    # ── Step 3 / 3 · Fetch music, copyright-check, then build video ──────
     total_duration = SCENE_DURATION * len(scenes)
 
     user_provided_music = music_path is not None  # remember before the path may be overwritten
 
-    if not music_path:
-        print("\n[ 3/3 ] Fetching trending music + building video...")
-        music_out = os.path.join(TEMP_DIR, "music")
-        music_info = fetch_trending_music(topic, JAMENDO_CLIENT_ID, total_duration, music_out,
-                                          used_ids=used_music_ids)
-        music_path = music_info["path"]
-        music_track = music_info.get("track_name", "")
-        music_artist = music_info.get("artist_name", "")
-        music_license = music_info.get("license_url", "")
-        music_id = music_info.get("track_id", "")
-    else:
-        print("\n[ 3/3 ] Building video...")
-        music_track = music_artist = music_license = music_id = ""
+    # ── Copyright check: videos ───────────────────────────────────────
+    print("\n[ Copyright ] Verifying downloaded video clips...")
+    vid_ok, bad_indices = check_videos(video_paths)
+    if not vid_ok:
+        # Re-download only the failed scenes
+        for i in bad_indices:
+            scene  = scenes[i]
+            search = scene.get("video_search", scene.get("location", "peaceful nature"))
+            print(f"  Re-downloading scene {i+1} ({search!r})...")
+            vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.mp4")
+            new_path, vid_id = fetch_nature_video(
+                search, PEXELS_API_KEY, vid_path,
+                used_ids=used_video_ids,
+            )
+            video_paths[i] = new_path
+            if vid_id:
+                this_run_video_ids[i] = vid_id
+                used_video_ids.add(vid_id)
 
+    # ── Fetch + copyright-check music (retry up to 3 times) ─────────
+    music_track = music_artist = music_license = music_id = ""
+    if not music_path:
+        print("\n[ 3/3 ] Fetching trending music...")
+        music_out  = os.path.join(TEMP_DIR, "music")
+        # IDs to skip — grows each attempt so we never re-try a rejected track
+        skip_music = set(used_music_ids)
+        music_info = {}
+
+        for attempt in range(1, 4):
+            music_info = fetch_trending_music(
+                topic, JAMENDO_CLIENT_ID, total_duration, music_out,
+                used_ids=skip_music,
+            )
+            # ── Copyright check: music ────────────────────────────────
+            ok, reason = check_music(music_info)
+            if ok:
+                break
+            # Rejected — add this track ID to the skip set and retry
+            bad_id = music_info.get("track_id", "")
+            if bad_id:
+                skip_music.add(bad_id)
+            print(f"  [Copyright] Attempt {attempt}/3 failed ({reason}) — fetching another track...")
+            # Remove bad file from disk
+            bad_path = music_info.get("path", "")
+            if bad_path and os.path.exists(bad_path):
+                try:
+                    os.unlink(bad_path)
+                except Exception:
+                    pass
+        else:
+            print("  [Copyright] Could not find a compliant track after 3 attempts — using ambient fallback.")
+            from src.ambient_generator import generate_ambient
+            music_info = {
+                "path": generate_ambient(total_duration, os.path.join(TEMP_DIR, "fallback.wav")),
+                "track_name": "", "artist_name": "", "license_url": "", "track_id": "",
+            }
+
+        music_path    = music_info["path"]
+        music_track   = music_info.get("track_name", "")
+        music_artist  = music_info.get("artist_name", "")
+        music_license = music_info.get("license_url", "")
+        music_id      = music_info.get("track_id", "")
+    else:
+        print("\n[ 3/3 ] Building video (user-supplied music)...")
+
+    print("\n        Building video...")
     safe   = _safe_filename(title)
     ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
     output = os.path.join(OUTPUT_DIR, f"{safe}_{ts}.mp4")
