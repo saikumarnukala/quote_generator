@@ -63,7 +63,7 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
         ffmpeg, "-y", "-i", src,
         "-c:v",       "libx264",
         "-profile:v", "baseline",
-        "-level:v",   "3.1",
+        "-level:v",   "4.0",
         "-pix_fmt",   "yuv420p",
         "-r",         "30",
         "-vsync",     "cfr",
@@ -81,7 +81,7 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
     try:
         result = subprocess.run(cmd, timeout=300, capture_output=True)
         if result.returncode == 0 and os.path.getsize(tmp) > 10_000:
-            print("  Instagram: re-encoded for compliance (baseline H.264, CFR, faststart).")
+            print("  Instagram: re-encoded for compliance (baseline H.264 L4.0, CFR, faststart).")
             return tmp, True
         print(f"  Instagram: FFmpeg transcode failed (rc={result.returncode}), uploading original.")
         if os.path.exists(tmp):
