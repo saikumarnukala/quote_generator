@@ -41,7 +41,14 @@
     "The beauty of life is its impermanence.",
     "We are all in the gutter, but some of us are looking at the stars.",
     "The world is a book, and those who do not travel read only one page.",
-    "In the stillness of the quiet, if we listen, we can hear the whisper of the heart."
+    "In the stillness of the quiet, if we listen, we can hear the whisper of the heart.",
+    "The darkness is to space what silence is to sound; the interval between the notes gives the music its beauty.",
+    "The highest wisdom and truth are like the purest liquids which hide themselves in the deepest wells.",
+    "The soul is dyed with the color of its thoughts; think only of those things that will bear the light of scrutiny.",
+    "The winter of our lives is not a season of barrenness, but a time of quiet and contemplation, when the seeds of our deepest desires take root.",
+    "The universe is a vast and wondrous tapestry, woven from the threads of light and darkness, and we are all a part of its intricate design.",
+    "The fire that burns within us is the same fire that forged the mountains and the stars; it is the spark of creation, and the flame of our deepest passions.",
+    "The depths of our souls are like the ocean, dark and mysterious, yet filled with hidden treasures and untold wonders, waiting to be discovered."
   ],
   "video_ids": [
     33983233,
@@ -54,8 +61,11 @@
     33422094,
     16747409,
     35289364,
+    34600596,
+    11630618,
     36020379,
     34348701,
+    33516959,
     33539491,
     30992167,
     34555047,
@@ -66,8 +76,10 @@
     31533107,
     36014259,
     35026615,
+    33803707,
     29644226,
     32611011,
+    35569733,
     32270792,
     31843659,
     9874895,
@@ -82,16 +94,19 @@
     28903387,
     30054113,
     30700898,
+    31766502,
     28915823,
     34535413,
     34535414,
+    30560632,
     31448827
   ],
   "music_ids": [
     "soundhelix-6",
-    "1217479",
-    "1182292",
+    "soundhelix-14",
     "soundhelix-1",
-    "soundhelix-3"
+    "soundhelix-3",
+    "1182292",
+    "1217479"
   ]
 }
