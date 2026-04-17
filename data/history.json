@@ -48,11 +48,19 @@
     "The winter of our lives is not a season of barrenness, but a time of quiet and contemplation, when the seeds of our deepest desires take root.",
     "The universe is a vast and wondrous tapestry, woven from the threads of light and darkness, and we are all a part of its intricate design.",
     "The fire that burns within us is the same fire that forged the mountains and the stars; it is the spark of creation, and the flame of our deepest passions.",
-    "The depths of our souls are like the ocean, dark and mysterious, yet filled with hidden treasures and untold wonders, waiting to be discovered."
+    "The depths of our souls are like the ocean, dark and mysterious, yet filled with hidden treasures and untold wonders, waiting to be discovered.",
+    "The morning sun shines not for itself, but to awaken the world to its own beauty.",
+    "Life is a spark that flickers in the darkness, yet illuminates the path to our deepest desires.",
+    "The universe whispers secrets to those who dare to listen to the silence.",
+    "The fragile beauty of life is a reminder to cherish every moment, for it is in the fleeting that we find the eternal.",
+    "From the depths of destruction, new worlds are born, and the cycle of creation begins anew.",
+    "The darkness is not the absence of light, but the presence of a deeper radiance, waiting to be discovered.",
+    "The horizon stretches out before us, a promise of endless possibility, and the chance to rewrite the story of our lives."
   ],
   "video_ids": [
     33983233,
     35482885,
+    11042822,
     35482888,
     34906504,
     30560393,
@@ -80,9 +88,12 @@
     29644226,
     32611011,
     35569733,
+    35288903,
     32270792,
     31843659,
+    33994571,
     9874895,
+    35297746,
     31993683,
     32001494,
     19857367,
@@ -92,21 +103,25 @@
     17060700,
     33967197,
     28903387,
+    20394720,
     30054113,
     30700898,
     31766502,
     28915823,
+    30221295,
     34535413,
     34535414,
     30560632,
-    31448827
+    31448827,
+    30575359
   ],
   "music_ids": [
-    "soundhelix-6",
-    "soundhelix-14",
-    "soundhelix-1",
+    "1217479",
     "soundhelix-3",
+    "soundhelix-1",
+    "soundhelix-9",
     "1182292",
-    "1217479"
+    "soundhelix-6",
+    "soundhelix-14"
   ]
 }
