@@ -90,12 +90,28 @@ Rules:
 - Each scene should feel like a breathtaking moment frozen in time
 - narration: intimate and poetic — as if speaking directly to one person's soul, not a crowd"""
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.85,
-        max_tokens=4000,
-    )
+    model_candidates = [
+        "llama-3.3-70b-versatile",
+        "llama-3.3-70b-specdec",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+    ]
+    last_err = None
+    for model in model_candidates:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.85,
+                max_tokens=4000,
+            )
+            break
+        except Exception as e:
+            last_err = e
+            print(f"  Quote generation model {model} failed: {e}")
+            continue
+    else:
+        raise RuntimeError(f"All Groq models failed. Last error: {last_err}")
 
     raw = response.choices[0].message.content.strip()
 
@@ -160,12 +176,28 @@ Rules:
 - hashtags: mix of broad (#meditation #quotes #shorts) and niche (#innerpeace #calmvibes) — 25–30 items
 - tags: plain English phrases, no #, 15–20 items, great for YouTube SEO"""
 
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7,
-        max_tokens=1500,
-    )
+    model_candidates = [
+        "llama-3.3-70b-versatile",
+        "llama-3.3-70b-specdec",
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+    ]
+    last_err = None
+    for model in model_candidates:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1500,
+            )
+            break
+        except Exception as e:
+            last_err = e
+            print(f"  Metadata generation model {model} failed: {e}")
+            continue
+    else:
+        raise RuntimeError(f"All Groq models failed. Last error: {last_err}")
 
     raw = response.choices[0].message.content.strip()
     raw = re.sub(r"^```[a-z]*\n?", "", raw, flags=re.MULTILINE)

@@ -270,7 +270,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
     # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
     print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")
     video_paths = []
-    this_run_video_ids = []
+    this_run_video_ids = {}  # dict: scene_idx -> vid_id (safe for re-downloads)
     for i, scene in enumerate(scenes):
         print(f"        Scene {i + 1}/{len(scenes)}...")
         vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.mp4")
@@ -281,7 +281,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
             try:
                 fetched_path, vid_id = fetch_nature_video(
                     search, PEXELS_API_KEY, vid_path,
-                    used_ids=used_video_ids | set(this_run_video_ids),
+                    used_ids=used_video_ids | set(this_run_video_ids.values()),
                 )
                 break
             except Exception as e:
@@ -289,7 +289,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
                 time.sleep(5)
         video_paths.append(fetched_path)
         if vid_id:
-            this_run_video_ids.append(vid_id)
+            this_run_video_ids[i] = vid_id
             used_video_ids.add(vid_id)
         print(f"        Scene {i + 1} done")
 
@@ -408,7 +408,7 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
         this_run_quotes = [s.get("quote", "") for s in scenes]
         record_run(
             quotes    = this_run_quotes,
-            video_ids = this_run_video_ids,
+            video_ids = list(this_run_video_ids.values()),
             music_id  = music_id or None,
         )
     except Exception as e:

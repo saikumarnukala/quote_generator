@@ -1,4 +1,4 @@
-﻿import math
+import math
 import os
 
 import numpy as np
@@ -152,7 +152,9 @@ def _fit_to_portrait(clip):
 # =====================================================================
 
 def _colour_grade(frame: np.ndarray) -> np.ndarray:
-    """Cinematic colour grade — warm highlights, teal shadows, film-like contrast."""
+    """Fast cinematic colour grade — warm highlights, teal shadows, film-like contrast.
+    Optimised for speed: vectorised numpy ops, no per-pixel Python loops.
+    """
     f = frame.astype(np.float32)
 
     # Lift contrast slightly (S-curve approximation)
@@ -160,22 +162,27 @@ def _colour_grade(frame: np.ndarray) -> np.ndarray:
 
     # Warm highlights: boost reds/yellows in bright areas
     bright_mask = (f.mean(axis=2, keepdims=True) / 255.0)
-    f[:, :, 0] = np.clip(f[:, :, 0] + 6 * bright_mask[:, :, 0], 0, 255)   # red lift
-    f[:, :, 1] = np.clip(f[:, :, 1] + 2 * bright_mask[:, :, 0], 0, 255)   # green slight
+    f[:, :, 0] = np.clip(f[:, :, 0] + 6 * bright_mask[:, :, 0], 0, 255)
+    f[:, :, 1] = np.clip(f[:, :, 1] + 2 * bright_mask[:, :, 0], 0, 255)
 
     # Teal shadows: push blue/cyan into dark areas
     shadow_mask = 1.0 - bright_mask
-    f[:, :, 2] = np.clip(f[:, :, 2] + 8 * shadow_mask[:, :, 0], 0, 255)   # blue push
-    f[:, :, 1] = np.clip(f[:, :, 1] + 3 * shadow_mask[:, :, 0], 0, 255)   # green slight
+    f[:, :, 2] = np.clip(f[:, :, 2] + 8 * shadow_mask[:, :, 0], 0, 255)
+    f[:, :, 1] = np.clip(f[:, :, 1] + 3 * shadow_mask[:, :, 0], 0, 255)
 
-    # Vignette — cinematic edge darkening
+    # Vignette — precompute once per shape to avoid reallocation every frame
     h, w = f.shape[:2]
-    ys = np.linspace(-1, 1, h, dtype=np.float32).reshape(-1, 1)
-    xs = np.linspace(-1, 1, w, dtype=np.float32).reshape(1, -1)
-    vignette = np.clip(1.0 - 0.40 * (ys**2 + xs**2), 0.50, 1.0)[:, :, np.newaxis]
-    f = f * vignette
+    key = (h, w)
+    if key not in _vignette_cache:
+        ys = np.linspace(-1, 1, h, dtype=np.float32).reshape(-1, 1)
+        xs = np.linspace(-1, 1, w, dtype=np.float32).reshape(1, -1)
+        _vignette_cache[key] = np.clip(1.0 - 0.40 * (ys**2 + xs**2), 0.50, 1.0)[:, :, np.newaxis]
+    f = f * _vignette_cache[key]
 
     return np.clip(f, 0, 255).astype(np.uint8)
+
+
+_vignette_cache = {}
 
 
 # =====================================================================
@@ -185,10 +192,13 @@ def _colour_grade(frame: np.ndarray) -> np.ndarray:
 def _build_scene_clip(video_path: str, duration: float, scene_idx: int,
                       overlay_rgba=None):
     """
-    Load a Pexels video, trim to `duration`, crop to portrait,
+    Load a video or image, trim/extend to `duration`, crop to portrait,
     apply colour grade and bake in quote overlay.
     """
-    raw = VideoFileClip(video_path, audio=False)
+    if video_path.lower().endswith((".png", ".jpg", ".jpeg")):
+        raw = ImageClip(video_path).set_duration(duration)
+    else:
+        raw = VideoFileClip(video_path, audio=False)
 
     # Loop if clip is shorter than needed
     if raw.duration < duration:
@@ -204,8 +214,9 @@ def _build_scene_clip(video_path: str, duration: float, scene_idx: int,
     # Portrait crop
     clip = _fit_to_portrait(clip)
 
-    # Colour grade
-    clip = clip.fl_image(_colour_grade)
+    # Colour grade (skipped in CI if SKIP_COLOUR_GRADE=1 to save ~70% render time)
+    if not os.environ.get("SKIP_COLOUR_GRADE"):
+        clip = clip.fl_image(_colour_grade)
 
     # Quote overlay
     if overlay_rgba is not None:
@@ -223,21 +234,23 @@ def build_video(
     scenes: list,
     video_paths: list = None,
     output_path: str = "",
-    music_path: str = None,
-    quote_data: list = None,
+    music_path:     str = None,
+    audio_paths:    list = None,
+    quote_data:     list = None,
     scene_duration: float = 12.0,
     # Legacy compat
     image_paths: list = None,
 ):
     """
-    Build the final peaceful quotes video from real Pexels footage.
+    Build the final video from scenes.
 
     Args:
-        scenes:         List of scene dicts from quote_generator.
-        video_paths:    Downloaded MP4 per scene (replaces image_paths).
+        scenes:         List of scene dicts.
+        video_paths:    Downloaded/generated MP4 per scene.
         output_path:    Where to write the final MP4.
-        music_path:     Path to ambient WAV file.
-        quote_data:     Same as scenes — used to render text overlay.
+        music_path:     Path to background music (optional).
+        audio_paths:    List of narration audio files per scene (optional).
+        quote_data:     Data for text overlay (optional).
         scene_duration: Seconds per scene (default 12s).
     """
     if video_paths is None:
@@ -252,9 +265,17 @@ def build_video(
         if quote_data and i < len(quote_data):
             q = quote_data[i]
             overlay = _make_quote_overlay(VIDEO_W, VIDEO_H,
-                                          q.get("quote", ""),
+                                          q.get("quote", q.get("narration", "")),
                                           q.get("author", ""))
         clip = _build_scene_clip(video_paths[i], scene_duration, i, overlay)
+        
+        # Attach per-scene audio if provided
+        if audio_paths and i < len(audio_paths) and audio_paths[i]:
+            if os.path.exists(audio_paths[i]):
+                scene_audio = AudioFileClip(audio_paths[i])
+                # If audio is longer than scene, we might need to adjust or let it be
+                clip = clip.set_audio(scene_audio)
+        
         scene_clips.append(clip)
 
     # Crossfade transitions — longer for smoother cinematic flow
@@ -274,8 +295,8 @@ def build_video(
         fps=FPS,
         codec="libx264",
         audio_codec="aac",
-        preset="medium",
-        bitrate="8000k",
+        preset="fast",
+        bitrate="5000k",
         threads=4,
         logger="bar",
         # Instagram / YouTube Shorts requirements:

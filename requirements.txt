@@ -6,9 +6,13 @@ requests>=2.31.0
 Pillow>=10.0.0
 
 # Video assembly
-moviepy==1.0.3
+moviepy>=1.0.3
+imageio-ffmpeg>=0.4.9
 numpy>=1.24.0
-decorator==4.4.2
+decorator>=4.4.2
+
+# Text-to-speech
+edge-tts>=6.1.0
 
 # Environment
 python-dotenv>=1.0.0

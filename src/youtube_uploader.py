@@ -13,17 +13,17 @@ Note: For a video to appear as a YouTube Short it must be ≤60 seconds AND 9:16
 import os
 import time
 
-YT_CLIENT_ID      = os.getenv("YT_CLIENT_ID")
-YT_CLIENT_SECRET  = os.getenv("YT_CLIENT_SECRET")
-YT_REFRESH_TOKEN  = os.getenv("YT_REFRESH_TOKEN")
+# YouTube credentials will be fetched inside the function to ensure they are available after load_dotenv()
 
 try:
     from google.oauth2.credentials import Credentials
     from google.auth.transport.requests import Request as GoogleRequest
     from googleapiclient.discovery import build
     from googleapiclient.http import MediaFileUpload
+    from googleapiclient.errors import HttpError
     _HAS_GOOGLE = True
 except ImportError:
+    HttpError = Exception  # Fallback
     _HAS_GOOGLE = False
 
 
@@ -40,8 +40,15 @@ def upload_to_youtube(
     Returns None and prints a warning if credentials are not configured.
     Raises RuntimeError on API failure.
     """
-    if not all([YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN]):
+    yt_client_id     = os.getenv("YT_CLIENT_ID")
+    yt_client_secret = os.getenv("YT_CLIENT_SECRET")
+    yt_refresh_token = os.getenv("YT_REFRESH_TOKEN")
+
+    if not all([yt_client_id, yt_client_secret, yt_refresh_token]):
         print("  YouTube: credentials not set (YT_CLIENT_ID / YT_CLIENT_SECRET / YT_REFRESH_TOKEN), skipping.")
+        print(f"    YT_CLIENT_ID: {'SET' if yt_client_id else 'MISSING'}")
+        print(f"    YT_CLIENT_SECRET: {'SET' if yt_client_secret else 'MISSING'}")
+        print(f"    YT_REFRESH_TOKEN: {'SET' if yt_refresh_token else 'MISSING'}")
         return None
 
     if not _HAS_GOOGLE:
@@ -52,13 +59,18 @@ def upload_to_youtube(
 
     credentials = Credentials(
         token=None,
-        refresh_token=YT_REFRESH_TOKEN,
-        client_id=YT_CLIENT_ID,
-        client_secret=YT_CLIENT_SECRET,
+        refresh_token=yt_refresh_token,
+        client_id=yt_client_id,
+        client_secret=yt_client_secret,
         token_uri="https://oauth2.googleapis.com/token",
         scopes=["https://www.googleapis.com/auth/youtube.upload"],
     )
-    credentials.refresh(GoogleRequest())
+    try:
+        credentials.refresh(GoogleRequest())
+    except Exception as e:
+        print(f"  YouTube: failed to refresh credentials: {e}")
+        print("    Try running 'python scripts/get_youtube_token.py' again to get a fresh refresh token.")
+        return None
 
     youtube = build("youtube", "v3", credentials=credentials, cache_discovery=False)
 
@@ -93,6 +105,11 @@ def upload_to_youtube(
     while response is None:
         try:
             _, response = request.next_chunk()
+        except HttpError as e:
+            if e.resp.status in (403, 429):
+                print(f"  YouTube ERROR: Quota exceeded or forbidden ({e.resp.status}).")
+                return None
+            raise
         except Exception as e:
             retry_count += 1
             if retry_count > 5:

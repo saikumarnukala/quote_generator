@@ -1,0 +1,108 @@
+name: Quote Generator Pipeline
+
+on:
+  schedule:
+    - cron: '0 6,12,18 * * *'
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'Custom quote theme (leave empty for auto)'
+        required: false
+        default: ''
+      scenes:
+        description: 'Number of scenes'
+        required: false
+        default: '7'
+      language:
+        description: 'Language'
+        required: false
+        default: 'en'
+        type: choice
+        options:
+          - en
+          - te
+          - hi
+          - ta
+          - ja
+
+permissions:
+  contents: write
+
+env:
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+  JAMENDO_CLIENT_ID: ${{ secrets.JAMENDO_CLIENT_ID }}
+  PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+  YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+  YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+  INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+  INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+  SKIP_COLOUR_GRADE: 1
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            fonts-noto \
+            fonts-dejavu-core
+          ffmpeg -version | head -n 1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip --quiet
+          pip install -r requirements.txt --quiet
+
+      - name: Run quote generator
+        run: |
+          TOPIC="${{ github.event.inputs.topic }}"
+          SCENES="${{ github.event.inputs.scenes || '7' }}"
+          LANG="${{ github.event.inputs.language || 'en' }}"
+          if [ -n "$TOPIC" ]; then
+            python main.py "$TOPIC" --scenes $SCENES --lang $LANG --allow-jamendo-upload
+          else
+            python main.py --scenes $SCENES --lang $LANG --allow-jamendo-upload
+          fi
+
+      - name: Commit history
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ -f data/history.json ]; then
+            git add data/history.json
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: update run history [skip ci]"
+              git push origin HEAD
+            else
+              echo "No history changes to commit."
+            fi
+          fi
+
+      - name: Upload output artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-videos
+          path: output/*.mp4
+          if-no-files-found: ignore
+          retention-days: 7
