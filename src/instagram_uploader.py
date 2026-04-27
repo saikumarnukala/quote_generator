@@ -51,25 +51,29 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
     Falls back to (src, False) if FFmpeg is unavailable or fails.
 
     Key settings that prevent ProcessingFailedError:
+      - Exact 1080x1920 9:16 ratio (Instagram is strict about dimensions)
       - yuv420p            : no alpha channel
       - cfr 30fps          : constant frame rate (VFR silently rejected by Meta)
       - movflags faststart : moov atom at start (required for streaming/processing)
-      - H.264 baseline 3.1: broadest decoder compatibility on Meta's servers
+      - H.264 main L4.0   : reliable profile for 1080p vertical video
       - AAC stereo 44100   : required audio spec
+      - 2-sec keyframes    : required for Meta's segment processing
     """
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
     tmp = tempfile.mktemp(suffix="_ig.mp4")
     cmd = [
         ffmpeg, "-y", "-i", src,
+        "-vf",        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30",
         "-c:v",       "libx264",
-        "-profile:v", "baseline",
+        "-profile:v", "main",
         "-level:v",   "4.0",
+        "-preset",    "fast",
         "-pix_fmt",   "yuv420p",
-        "-r",         "30",
         "-vsync",     "cfr",
-        "-b:v",       "3500k",
-        "-maxrate",   "3500k",
-        "-bufsize",   "7000k",
+        "-b:v",       "4000k",
+        "-maxrate",   "4000k",
+        "-bufsize",   "8000k",
+        "-x264opts",  "keyint=60:min-keyint=60:no-scenecut",
         "-c:a",       "aac",
         "-ar",        "44100",
         "-ac",        "2",
@@ -126,7 +130,6 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
             "media_type":    "REELS",
             "upload_type":   "resumable",
             "caption":       caption,
-            "share_to_feed": "true",
             "access_token":  token,
         },
         timeout=30,
