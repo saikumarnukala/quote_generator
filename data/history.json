@@ -1,1 +1,23 @@
-{"quotes": [], "video_ids": [], "music_ids": []}
+{
+  "quotes": [
+    "The wound is the place where the light enters you.",
+    "Nature does not hurry, yet everything is accomplished.",
+    "The universe is change; our life is what our thoughts make it.",
+    "The earth has music for those who listen.",
+    "The greatest glory in living lies not in never falling, but in rising every time we fall.",
+    "In the depth of winter, I finally learned that within me there lay an invincible summer.",
+    "The clearest way into the Universe is through a forest wilderness."
+  ],
+  "video_ids": [
+    14200833,
+    30094293,
+    31643738,
+    34192087,
+    35569880,
+    35557418,
+    34905582
+  ],
+  "music_ids": [
+    "soundhelix-14"
+  ]
+}
