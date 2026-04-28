@@ -207,39 +207,29 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
             os.unlink(upload_path)
         raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
 
-    # ── Step 2: Chunked upload ───────────────────────────────────────
-    # Meta's resumable endpoint expects chunks ≤ ~4 MB (4194304 bytes).
-    CHUNK_SIZE = 4 * 1024 * 1024
-    offset = 0
+    # ── Step 2: Upload video bytes ───────────────────────────────────
+    # Meta's resumable endpoint accepts single-shot uploads for files < 1 GB.
     with open(upload_path, "rb") as fh:
-        while offset < file_size:
-            chunk = fh.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            up = requests.post(
-                upload_uri,
-                headers={
-                    "Authorization":  f"OAuth {token}",
-                    "offset":         str(offset),
-                    "file_size":      str(file_size),
-                    "Content-Type":   "application/octet-stream",
-                },
-                data=chunk,
-                timeout=120,
-            )
-            if up.status_code not in (200, 201):
-                if is_temp and os.path.exists(upload_path):
-                    os.unlink(upload_path)
-                raise RuntimeError(
-                    f"Instagram: chunk upload failed at offset {offset} "
-                    f"({up.status_code}): {up.text}"
-                )
-            offset += len(chunk)
-            print(f"  Uploaded {offset}/{file_size} bytes", end="\r", flush=True)
-    print(f"  Uploaded {file_size}/{file_size} bytes")
-
+        video_bytes = fh.read()
+    up = requests.post(
+        upload_uri,
+        headers={
+            "Authorization":  f"OAuth {token}",
+            "offset":         "0",
+            "file_size":      str(file_size),
+            "Content-Length": str(file_size),
+            "Content-Type":   "application/octet-stream",
+        },
+        data=video_bytes,
+        timeout=300,
+    )
     if is_temp and os.path.exists(upload_path):
         os.unlink(upload_path)
+    print(f"  [debug] upload response: {up.status_code} {up.text[:400]}")
+    if up.status_code not in (200, 201, 206):
+        raise RuntimeError(
+            f"Instagram: video upload failed ({up.status_code}): {up.text}"
+        )
 
     # ── Step 3: Poll until processing finishes (max 5 minutes) ────────
     print("  Instagram: processing", end="", flush=True)
