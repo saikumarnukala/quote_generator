@@ -18,13 +18,15 @@ import shutil
 import subprocess
 import tempfile
 import time
+import urllib.error
+import urllib.request
 
 import requests
 
 from config import INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET
 
-GRAPH_BASE  = "https://graph.facebook.com/v22.0"
-UPLOAD_BASE = "https://rupload.facebook.com/video-upload/v22.0"
+GRAPH_BASE  = "https://graph.facebook.com/v25.0"
+UPLOAD_BASE = "https://rupload.facebook.com/video-upload/v25.0"
 
 INSTAGRAM_USER_ID      = os.getenv("INSTAGRAM_USER_ID")
 INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
@@ -108,6 +110,7 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
         "-preset",    "fast",
         "-pix_fmt",   "yuv420p",
         "-vsync",     "cfr",
+        "-bf",        "0",
         "-b:v",       "4000k",
         "-maxrate",   "4000k",
         "-bufsize",   "8000k",
@@ -211,25 +214,40 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     # Meta's resumable endpoint accepts single-shot uploads for files < 1 GB.
     with open(upload_path, "rb") as fh:
         video_bytes = fh.read()
-    up = requests.post(
-        upload_uri,
-        headers={
-            "Authorization":  f"OAuth {token}",
-            "offset":         "0",
-            "file_size":      str(file_size),
-            "Content-Length": str(file_size),
-            "Content-Type":   "application/octet-stream",
-        },
-        data=video_bytes,
-        timeout=300,
-    )
+
+    # Try OAuth first, then Bearer — Meta accepts either depending on token type.
+    for auth_prefix in ("OAuth", "Bearer"):
+        req = urllib.request.Request(upload_uri, method="POST", data=video_bytes)
+        req.add_header("Authorization", f"{auth_prefix} {token}")
+        req.add_header("offset", "0")
+        req.add_header("file_size", str(file_size))
+        req.add_header("Content-Type", "application/octet-stream")
+        # urllib handles Content-Length automatically from data length
+        try:
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                up_body = resp.read().decode("utf-8", errors="replace")
+                up_code = resp.status
+            print(f"  [debug] upload response ({auth_prefix}): {up_code} {up_body[:400]}")
+            break  # success — leave the loop
+        except urllib.error.HTTPError as e:
+            up_body = e.read().decode("utf-8", errors="replace")
+            up_code = e.code
+            print(f"  [debug] upload response ({auth_prefix}): {up_code} {up_body[:400]}")
+            if auth_prefix == "Bearer" or up_code not in (400, 401, 403):
+                if is_temp and os.path.exists(upload_path):
+                    os.unlink(upload_path)
+                raise RuntimeError(
+                    f"Instagram: video upload failed ({up_code}): {up_body}"
+                )
+            # If OAuth 400/401, try Bearer next iteration
+            continue
+        except Exception as e:
+            if is_temp and os.path.exists(upload_path):
+                os.unlink(upload_path)
+            raise RuntimeError(f"Instagram: upload request error: {e}")
+
     if is_temp and os.path.exists(upload_path):
         os.unlink(upload_path)
-    print(f"  [debug] upload response: {up.status_code} {up.text[:400]}")
-    if up.status_code not in (200, 201, 206):
-        raise RuntimeError(
-            f"Instagram: video upload failed ({up.status_code}): {up.text}"
-        )
 
     # ── Step 3: Poll until processing finishes (max 5 minutes) ────────
     print("  Instagram: processing", end="", flush=True)

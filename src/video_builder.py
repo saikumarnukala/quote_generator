@@ -313,6 +313,7 @@ def build_video(
         #   - yuv420p pixel format (Instagram rejects yuva420p / other formats)
         #   - H.264 Main profile level 4.0 (standard for 1080p; baseline 3.1 maxes at 720p)
         #   - No B-frames (Meta's Reels processor rejects them)
+        #   - 2-second keyframes (-g 60) required by Instagram's segment processor
         #   - Stereo AAC audio at 44100 Hz
         #   - movflags faststart: moov atom at file start (required by Meta's transcoder)
         #   - vsync cfr: constant frame rate (VFR causes ProcessingFailedError on Instagram)
@@ -321,6 +322,8 @@ def build_video(
             "-profile:v",   "main",
             "-level:v",     "4.0",
             "-bf",          "0",
+            "-g",           "60",
+            "-keyint_min",  "60",
             "-r",           str(FPS),
             "-vsync",       "cfr",
             "-ar",          "44100",
