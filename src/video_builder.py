@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import (
     AudioFileClip,
+    AudioClip,
     VideoFileClip,
     ImageClip,
     concatenate_videoclips,
@@ -285,10 +286,19 @@ def build_video(
     else:
         final = scene_clips[0]
 
-    # Attach ambient music
+    # Attach ambient music (or silent placeholder — Instagram requires AAC audio)
     if music_path and os.path.exists(music_path):
         music = AudioFileClip(music_path).volumex(0.80).set_duration(final.duration)
         final = final.set_audio(music)
+    else:
+        # Create a silent stereo AAC placeholder so the output always has an audio stream.
+        # Instagram's Reels API rejects video-only MP4s with ProcessingFailedError.
+        silent = AudioClip(
+            lambda t: np.zeros((2,)),
+            duration=final.duration,
+            fps=44100,
+        )
+        final = final.set_audio(silent)
 
     final.write_videofile(
         output_path,
@@ -301,15 +311,15 @@ def build_video(
         logger="bar",
         # Instagram / YouTube Shorts requirements:
         #   - yuv420p pixel format (Instagram rejects yuva420p / other formats)
-        #   - H.264 Baseline profile level 3.1 (most compatible with Meta's transcoder)
+        #   - H.264 Main profile level 4.0 (standard for 1080p; baseline 3.1 maxes at 720p)
         #   - No B-frames (Meta's Reels processor rejects them)
         #   - Stereo AAC audio at 44100 Hz
         #   - movflags faststart: moov atom at file start (required by Meta's transcoder)
         #   - vsync cfr: constant frame rate (VFR causes ProcessingFailedError on Instagram)
         ffmpeg_params=[
             "-pix_fmt",     "yuv420p",
-            "-profile:v",   "baseline",
-            "-level:v",     "3.1",
+            "-profile:v",   "main",
+            "-level:v",     "4.0",
             "-bf",          "0",
             "-r",           str(FPS),
             "-vsync",       "cfr",

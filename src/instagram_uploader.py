@@ -76,9 +76,31 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
       - 2-sec keyframes    : required for Meta's segment processing
     """
     ffmpeg = shutil.which("ffmpeg") or "ffmpeg"
+    ffprobe_bin = ffmpeg.replace("ffmpeg", "ffprobe")
+
+    # Detect whether the source already has an audio stream
+    has_audio = False
+    try:
+        probe = subprocess.run(
+            [ffprobe_bin, "-v", "error", "-select_streams", "a",
+             "-show_entries", "stream=codec_type", "-of", "csv=p=0", src],
+            capture_output=True, text=True, timeout=15,
+        )
+        has_audio = "audio" in probe.stdout
+    except Exception:
+        pass
+
     tmp = tempfile.mktemp(suffix="_ig.mp4")
+
+    # Base video command (always re-encode to guarantee compliance)
     cmd = [
         ffmpeg, "-y", "-i", src,
+    ]
+    # If the input has no audio track, inject a silent one so Meta doesn't reject it.
+    if not has_audio:
+        cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-shortest"]
+
+    cmd += [
         "-vf",        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30",
         "-c:v",       "libx264",
         "-profile:v", "main",
@@ -101,7 +123,7 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
     try:
         result = subprocess.run(cmd, timeout=300, capture_output=True)
         if result.returncode == 0 and os.path.getsize(tmp) > 10_000:
-            print("  Instagram: re-encoded for compliance (baseline H.264 L4.0, CFR, faststart).")
+            print("  Instagram: re-encoded for compliance (main H.264 L4.0, CFR, faststart).")
             return tmp, True
         print(f"  Instagram: FFmpeg transcode failed (rc={result.returncode}), uploading original.")
         if os.path.exists(tmp):
@@ -135,7 +157,7 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     token = _refresh_token(INSTAGRAM_ACCESS_TOKEN)
     print("  Uploading to Instagram Reels...")
 
-    # Builder now outputs Instagram-safe baseline H.264 — skip re-encoding to avoid corruption.
+    # Builder now outputs Instagram-safe H.264 — skip re-encoding to avoid corruption.
     # If you need to force a re-encode, set env var FORCE_INSTAGRAM_REENCODE=1.
     if os.getenv("FORCE_INSTAGRAM_REENCODE"):
         upload_path, is_temp = _transcode_for_instagram(video_path)
@@ -143,6 +165,21 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
         upload_path, is_temp = video_path, False
 
     file_size = os.path.getsize(upload_path)
+
+    # ── Optional: validate container with ffprobe ─────────────────────
+    ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
+    ffprobe = ffmpeg_bin.replace("ffmpeg", "ffprobe")
+    try:
+        probe = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries",
+             "format=duration,bit_rate:stream=codec_name,width,height,pix_fmt,r_frame_rate,profile,level",
+             "-of", "json", upload_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if probe.returncode == 0:
+            print(f"  [debug] ffprobe: {probe.stdout[:500]}")
+    except Exception:
+        pass
 
     # ── Step 1: Create upload session ─────────────────────────────────
     r = requests.post(
@@ -161,6 +198,7 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
         raise RuntimeError(f"Instagram: failed to create upload session: {r.text}")
 
     resp_data    = r.json()
+    print(f"  [debug] create_session response: {resp_data}")
     container_id = resp_data.get("id")
     upload_uri   = resp_data.get("uri")
 
@@ -169,25 +207,39 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
             os.unlink(upload_path)
         raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
 
-    # ── Step 2: Upload video bytes ────────────────────────────────────
+    # ── Step 2: Chunked upload ───────────────────────────────────────
+    # Meta's resumable endpoint expects chunks ≤ ~4 MB (4194304 bytes).
+    CHUNK_SIZE = 4 * 1024 * 1024
+    offset = 0
     with open(upload_path, "rb") as fh:
-        video_bytes = fh.read()
-    up = requests.post(
-        upload_uri,
-        headers={
-            "Authorization":  f"OAuth {token}",
-            "offset":         "0",
-            "file_size":      str(file_size),
-            "Content-Length": str(file_size),
-            "Content-Type":   "application/octet-stream",
-        },
-        data=video_bytes,
-        timeout=300,
-    )
+        while offset < file_size:
+            chunk = fh.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            up = requests.post(
+                upload_uri,
+                headers={
+                    "Authorization":  f"OAuth {token}",
+                    "offset":         str(offset),
+                    "file_size":      str(file_size),
+                    "Content-Type":   "application/octet-stream",
+                },
+                data=chunk,
+                timeout=120,
+            )
+            if up.status_code not in (200, 201):
+                if is_temp and os.path.exists(upload_path):
+                    os.unlink(upload_path)
+                raise RuntimeError(
+                    f"Instagram: chunk upload failed at offset {offset} "
+                    f"({up.status_code}): {up.text}"
+                )
+            offset += len(chunk)
+            print(f"  Uploaded {offset}/{file_size} bytes", end="\r", flush=True)
+    print(f"  Uploaded {file_size}/{file_size} bytes")
+
     if is_temp and os.path.exists(upload_path):
         os.unlink(upload_path)
-    if up.status_code not in (200, 201):
-        raise RuntimeError(f"Instagram: video upload failed ({up.status_code}): {up.text}")
 
     # ── Step 3: Poll until processing finishes (max 5 minutes) ────────
     print("  Instagram: processing", end="", flush=True)
