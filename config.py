@@ -15,8 +15,10 @@ YT_CLIENT_SECRET  = os.getenv("YT_CLIENT_SECRET")
 YT_REFRESH_TOKEN  = os.getenv("YT_REFRESH_TOKEN")
 
 # Instagram upload (optional — leave blank to skip)
-INSTAGRAM_USER_ID      = os.getenv("INSTAGRAM_USER_ID")
-INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+INSTAGRAM_USER_ID       = os.getenv("INSTAGRAM_USER_ID")
+INSTAGRAM_ACCESS_TOKEN  = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+INSTAGRAM_APP_ID        = os.getenv("INSTAGRAM_APP_ID")
+INSTAGRAM_APP_SECRET    = os.getenv("INSTAGRAM_APP_SECRET")
 
 # 9:16 vertical — YouTube Shorts & Instagram Reels (max supported: 1080×1920 @ 30fps)
 VIDEO_WIDTH  = 1080

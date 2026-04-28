@@ -21,6 +21,8 @@ import time
 
 import requests
 
+from config import INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET
+
 GRAPH_BASE  = "https://graph.facebook.com/v22.0"
 UPLOAD_BASE = "https://rupload.facebook.com/video-upload/v22.0"
 
@@ -29,17 +31,31 @@ INSTAGRAM_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN")
 
 
 def _refresh_token(token: str) -> str:
-    """Extend a long-lived token's 60-day expiry window."""
+    """Refresh a long-lived Graph API token using fb_exchange_token.
+    Requires INSTAGRAM_APP_SECRET (Meta app secret) to be set.
+    Falls back to the original token if refresh fails.
+    """
+    if not INSTAGRAM_APP_SECRET:
+        return token
     try:
+        # Graph API: exchange existing long-lived token for a fresh 60-day token
         r = requests.get(
             f"{GRAPH_BASE}/oauth/access_token",
-            params={"grant_type": "ig_refresh_token", "access_token": token},
+            params={
+                "grant_type": "fb_exchange_token",
+                "client_id": INSTAGRAM_APP_ID or "",
+                "client_secret": INSTAGRAM_APP_SECRET,
+                "fb_exchange_token": token,
+            },
             timeout=30,
         )
         if r.status_code == 200:
-            return r.json().get("access_token", token)
-    except Exception:
-        pass
+            new_token = r.json().get("access_token")
+            if new_token:
+                print("  Instagram: token refreshed successfully.")
+                return new_token
+    except Exception as e:
+        print(f"  Instagram: token refresh failed ({e}), using existing token.")
     return token
 
 
