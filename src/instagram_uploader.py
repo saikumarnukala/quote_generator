@@ -103,6 +103,8 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
         cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-shortest"]
 
     cmd += [
+        "-fflags",    "+genpts",
+        "-avoid_negative_ts", "make_zero",
         "-vf",        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30",
         "-c:v",       "libx264",
         "-profile:v", "main",
@@ -111,9 +113,9 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
         "-pix_fmt",   "yuv420p",
         "-vsync",     "cfr",
         "-bf",        "0",
-        "-b:v",       "4000k",
-        "-maxrate",   "4000k",
-        "-bufsize",   "8000k",
+        "-b:v",       "3000k",
+        "-maxrate",   "3000k",
+        "-bufsize",   "6000k",
         "-x264opts",  "keyint=60:min-keyint=60:no-scenecut",
         "-c:a",       "aac",
         "-ar",        "44100",
@@ -160,12 +162,9 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     token = _refresh_token(INSTAGRAM_ACCESS_TOKEN)
     print("  Uploading to Instagram Reels...")
 
-    # Builder now outputs Instagram-safe H.264 — skip re-encoding to avoid corruption.
-    # If you need to force a re-encode, set env var FORCE_INSTAGRAM_REENCODE=1.
-    if os.getenv("FORCE_INSTAGRAM_REENCODE"):
-        upload_path, is_temp = _transcode_for_instagram(video_path)
-    else:
-        upload_path, is_temp = video_path, False
+    # Re-encode every video before upload to normalize the container and fix
+    # subtle MoviePy output issues (timestamp drift, moov placement, etc.).
+    upload_path, is_temp = _transcode_for_instagram(video_path)
 
     file_size = os.path.getsize(upload_path)
 
@@ -209,6 +208,9 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
         if is_temp and os.path.exists(upload_path):
             os.unlink(upload_path)
         raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
+
+    # Small warmup — Meta's container sometimes needs a moment before accepting bytes.
+    time.sleep(2)
 
     # ── Step 2: Chunked upload ───────────────────────────────────────
     # Meta's resumable endpoint is flaky with single-shot > 50 MB.
