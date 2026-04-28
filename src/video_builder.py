@@ -301,14 +301,16 @@ def build_video(
         logger="bar",
         # Instagram / YouTube Shorts requirements:
         #   - yuv420p pixel format (Instagram rejects yuva420p / other formats)
-        #   - H.264 High profile level 4.0 (broadly compatible)
+        #   - H.264 Baseline profile level 3.1 (most compatible with Meta's transcoder)
+        #   - No B-frames (Meta's Reels processor rejects them)
         #   - Stereo AAC audio at 44100 Hz
         #   - movflags faststart: moov atom at file start (required by Meta's transcoder)
         #   - vsync cfr: constant frame rate (VFR causes ProcessingFailedError on Instagram)
         ffmpeg_params=[
             "-pix_fmt",     "yuv420p",
-            "-profile:v",   "high",
-            "-level:v",     "4.0",
+            "-profile:v",   "baseline",
+            "-level:v",     "3.1",
+            "-bf",          "0",
             "-r",           str(FPS),
             "-vsync",       "cfr",
             "-ar",          "44100",

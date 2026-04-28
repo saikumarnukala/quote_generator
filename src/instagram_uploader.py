@@ -135,8 +135,13 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     token = _refresh_token(INSTAGRAM_ACCESS_TOKEN)
     print("  Uploading to Instagram Reels...")
 
-    # Re-encode with guaranteed-compliant settings before upload
-    upload_path, is_temp = _transcode_for_instagram(video_path)
+    # Builder now outputs Instagram-safe baseline H.264 — skip re-encoding to avoid corruption.
+    # If you need to force a re-encode, set env var FORCE_INSTAGRAM_REENCODE=1.
+    if os.getenv("FORCE_INSTAGRAM_REENCODE"):
+        upload_path, is_temp = _transcode_for_instagram(video_path)
+    else:
+        upload_path, is_temp = video_path, False
+
     file_size = os.path.getsize(upload_path)
 
     # ── Step 1: Create upload session ─────────────────────────────────
@@ -164,19 +169,21 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
             os.unlink(upload_path)
         raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
 
-    # ── Step 2: Stream video bytes ────────────────────────────────────
+    # ── Step 2: Upload video bytes ────────────────────────────────────
     with open(upload_path, "rb") as fh:
-        up = requests.post(
-            upload_uri,
-            headers={
-                "Authorization": f"OAuth {token}",
-                "offset":        "0",
-                "file_size":     str(file_size),
-                "Content-Type":  "application/octet-stream",
-            },
-            data=fh,
-            timeout=300,
-        )
+        video_bytes = fh.read()
+    up = requests.post(
+        upload_uri,
+        headers={
+            "Authorization":  f"OAuth {token}",
+            "offset":         "0",
+            "file_size":      str(file_size),
+            "Content-Length": str(file_size),
+            "Content-Type":   "application/octet-stream",
+        },
+        data=video_bytes,
+        timeout=300,
+    )
     if is_temp and os.path.exists(upload_path):
         os.unlink(upload_path)
     if up.status_code not in (200, 201):
