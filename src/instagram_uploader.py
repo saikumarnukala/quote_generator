@@ -215,8 +215,8 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     with open(upload_path, "rb") as fh:
         video_bytes = fh.read()
 
-    # Try OAuth first, then Bearer — Meta accepts either depending on token type.
-    for auth_prefix in ("OAuth", "Bearer"):
+    # Meta's rupload endpoint accepts Bearer; OAuth is rejected with 400.
+    for auth_prefix in ("Bearer", "OAuth"):
         req = urllib.request.Request(upload_uri, method="POST", data=video_bytes)
         req.add_header("Authorization", f"{auth_prefix} {token}")
         req.add_header("offset", "0")
