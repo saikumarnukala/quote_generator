@@ -306,7 +306,7 @@ def build_video(
         codec="libx264",
         audio_codec="aac",
         preset="fast",
-        bitrate="5000k",
+        bitrate="3000k",
         threads=4,
         logger="bar",
         # Instagram / YouTube Shorts requirements:

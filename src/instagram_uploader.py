@@ -210,41 +210,38 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
             os.unlink(upload_path)
         raise RuntimeError(f"Instagram: unexpected response creating session: {resp_data}")
 
-    # ── Step 2: Upload video bytes ───────────────────────────────────
-    # Meta's resumable endpoint accepts single-shot uploads for files < 1 GB.
+    # ── Step 2: Chunked upload ───────────────────────────────────────
+    # Meta's resumable endpoint is flaky with single-shot > 50 MB.
+    # Upload in 4 MB chunks; urllib.request sets explicit Content-Length per chunk.
+    CHUNK_SIZE = 4 * 1024 * 1024
+    offset = 0
     with open(upload_path, "rb") as fh:
-        video_bytes = fh.read()
-
-    # Meta's rupload endpoint accepts Bearer; OAuth is rejected with 400.
-    for auth_prefix in ("Bearer", "OAuth"):
-        req = urllib.request.Request(upload_uri, method="POST", data=video_bytes)
-        req.add_header("Authorization", f"{auth_prefix} {token}")
-        req.add_header("offset", "0")
-        req.add_header("file_size", str(file_size))
-        req.add_header("Content-Type", "application/octet-stream")
-        # urllib handles Content-Length automatically from data length
-        try:
-            with urllib.request.urlopen(req, timeout=300) as resp:
-                up_body = resp.read().decode("utf-8", errors="replace")
-                up_code = resp.status
-            print(f"  [debug] upload response ({auth_prefix}): {up_code} {up_body[:400]}")
-            break  # success — leave the loop
-        except urllib.error.HTTPError as e:
-            up_body = e.read().decode("utf-8", errors="replace")
-            up_code = e.code
-            print(f"  [debug] upload response ({auth_prefix}): {up_code} {up_body[:400]}")
-            if auth_prefix == "Bearer" or up_code not in (400, 401, 403):
-                if is_temp and os.path.exists(upload_path):
-                    os.unlink(upload_path)
-                raise RuntimeError(
-                    f"Instagram: video upload failed ({up_code}): {up_body}"
-                )
-            # If OAuth 400/401, try Bearer next iteration
-            continue
-        except Exception as e:
-            if is_temp and os.path.exists(upload_path):
-                os.unlink(upload_path)
-            raise RuntimeError(f"Instagram: upload request error: {e}")
+        while offset < file_size:
+            chunk = fh.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            req = urllib.request.Request(upload_uri, method="POST", data=chunk)
+            req.add_header("Authorization", f"Bearer {token}")
+            req.add_header("offset", str(offset))
+            req.add_header("file_size", str(file_size))
+            req.add_header("Content-Type", "application/octet-stream")
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    up_body = resp.read().decode("utf-8", errors="replace")
+                    up_code = resp.status
+            except urllib.error.HTTPError as e:
+                up_body = e.read().decode("utf-8", errors="replace")
+                up_code = e.code
+            offset += len(chunk)
+            print(f"  Uploaded {offset}/{file_size} bytes", end="\r", flush=True)
+    print(f"  Uploaded {file_size}/{file_size} bytes")
+    print(f"  [debug] last chunk response: {up_code} {up_body[:400]}")
+    if up_code not in (200, 201, 206):
+        if is_temp and os.path.exists(upload_path):
+            os.unlink(upload_path)
+        raise RuntimeError(
+            f"Instagram: video upload failed ({up_code}): {up_body}"
+        )
 
     if is_temp and os.path.exists(upload_path):
         os.unlink(upload_path)
