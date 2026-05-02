@@ -1,65 +1,135 @@
-# 💬 Quote Generator
+# Peaceful Quotes Video Generator
 
-A simple and elegant Quote Generator web app that displays inspirational quotes dynamically.
+Automated Python pipeline that generates **calming quote videos** with AI-generated landscapes, inspirational quotes, ambient music, and TTS narration — then publishes to **YouTube Shorts** and **Instagram Reels**. Runs locally or via **GitHub Actions** on a daily schedule.
 
-## 🚀 Live Demo
+## Features
 
-[View Live](https://saikumarnukala.github.io/quote_generator)
+- **AI Quote Generation** — Groq generates thematic inspirational quotes with cinematic scene descriptions
+- **Stock Nature Videos** — Pexels + Pixabay APIs fetch calming landscape footage
+- **Text-to-Speech Narration** — Microsoft Edge TTS reads quotes aloud
+- **Dynamic Text Overlays** — Elegant quote text rendered over video with Noto/DejaVu fonts
+- **Ambient Music** — Jamendo API downloads royalty-free peaceful background music
+- **YouTube Upload** — Auto-publishes as YouTube Shorts via OAuth
+- **Instagram Upload** — Auto-publishes as Instagram Reels via Graph API (with H.264 re-encoding)
+- **Multi-language** — Supports English, Telugu, Hindi, Tamil, and Japanese
+- **Run History** — Tracks used quotes, videos, and music to avoid repetition
+- **Copyright Checking** — Validates music and video licensing before upload
+- **GitHub Actions CI/CD** — Automated daily pipeline
 
-## 📸 Screenshots
+## Quick Start
 
-> Add a screenshot of your app here.
+### 1. Clone and install
 
-## ✨ Features
+```bash
+git clone https://github.com/saikumarnukala/quote_generator.git
+cd quote_generator
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS / Linux
+pip install -r requirements.txt
+```
 
-- Generates random inspirational quotes
-- Clean and responsive UI
-- Easy to use with a single click
+### 2. Configure API keys
 
-## 🛠️ Tech Stack
+Create a `.env` file with your keys:
 
-- HTML
-- CSS
-- JavaScript
+| Key | Where to Get | Required |
+|-----|-------------|----------|
+| `GROQ_API_KEY` | [Groq Console](https://console.groq.com/) — Free | Yes |
+| `PEXELS_API_KEY` | [Pexels API](https://www.pexels.com/api/) — Free | Yes |
+| `JAMENDO_CLIENT_ID` | [Jamendo Developer](https://developer.jamendo.com/) — Free | For music |
+| `PIXABAY_API_KEY` | [Pixabay API](https://pixabay.com/api/docs/) — Free | Optional fallback |
+| `YT_CLIENT_ID` | [Google Cloud Console](https://console.cloud.google.com/) | For YouTube |
+| `YT_CLIENT_SECRET` | Google Cloud Console | For YouTube |
+| `YT_REFRESH_TOKEN` | Generated via OAuth flow | For YouTube |
+| `INSTAGRAM_USER_ID` | [Meta Developer Portal](https://developers.facebook.com/) | For Instagram |
+| `INSTAGRAM_ACCESS_TOKEN` | Meta Developer Portal | For Instagram |
 
-## 📁 Getting Started
+### 3. Run the pipeline
 
-### Prerequisites
+```bash
+# Auto-select topic from rotating pool
+python main.py
 
-- A modern web browser
+# Custom topic
+python main.py "gratitude and inner peace"
 
-### Installation
+# Telugu, 8 scenes
+python main.py --scenes 8 --lang te
 
-1. Clone the repository:
+# With Jamendo music upload permission
+python main.py --allow-jamendo-upload
+```
 
-   ```bash
-   git clone https://github.com/saikumarnukala/quote_generator.git
-   ```
+## GitHub Actions (Automated Daily Pipeline)
 
-2. Navigate to the project folder:
+The workflow runs **once daily** at peak engagement:
 
-   ```bash
-   cd quote_generator
-   ```
+| Time (IST) | UTC | Workflow |
+|---|---|---|
+| 12:30 PM | 07:00 | Quote video generation + upload |
 
-3. Open `index.html` in your browser.
+### Required GitHub Secrets
 
-## 🤝 Contributing
+Go to **Settings > Secrets and variables > Actions** and add:
 
-Contributions are welcome! Feel free to open an issue or submit a pull request.
+| Secret | Description |
+|--------|-------------|
+| `GROQ_API_KEY` | Groq API key |
+| `PEXELS_API_KEY` | Pexels API key |
+| `JAMENDO_CLIENT_ID` | Jamendo client ID |
+| `YT_CLIENT_ID` | YouTube OAuth client ID |
+| `YT_CLIENT_SECRET` | YouTube OAuth client secret |
+| `YT_REFRESH_TOKEN` | YouTube OAuth refresh token |
+| `INSTAGRAM_USER_ID` | Instagram business account user ID |
+| `INSTAGRAM_ACCESS_TOKEN` | Instagram Graph API access token |
 
-1. Fork the repository
-2. Create your feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m 'Add your feature'`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Open a Pull Request
+Optional: `PIXABAY_API_KEY`, `HF_TOKEN`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`
 
-## 📄 License
+### Manual trigger
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Go to **Actions > Quote Generator Pipeline > Run workflow** — you can override topic, scene count, and language.
 
-## 👤 Author
+## Project Structure
 
-**Sai Kumar Nukala**
+```
+quote_generator/
+├── main.py                      # Main orchestrator
+├── config.py                    # Environment config loader
+├── requirements.txt
+├── data/
+│   └── history.json             # Run history (quotes, videos, music used)
+├── .github/
+│   └── workflows/
+│       ├── generate.yml         # Primary GitHub Actions workflow
+│       └── quote_generator.yml  # Alternative workflow
+└── src/
+    ├── quote_generator.py       # AI quote + metadata generation (Groq)
+    ├── video_fetcher.py         # Pexels / Pixabay nature video fetcher
+    ├── music_fetcher.py         # Jamendo ambient music fetcher
+    ├── ambient_generator.py     # Ambient audio generation
+    ├── audio_generator.py       # Edge TTS narration
+    ├── video_builder.py         # MoviePy video assembly + text overlays
+    ├── subtitle_generator.py    # Subtitle timing generator
+    ├── youtube_uploader.py      # YouTube Shorts upload (OAuth)
+    ├── instagram_uploader.py    # Instagram Reels upload (Graph API)
+    ├── history.py               # Run history tracking (never-repeat)
+    └── copyright_checker.py     # Music/video license validation
+```
 
-- GitHub: [@saikumarnukala](https://github.com/saikumarnukala)
+## Configuration
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `VIDEO_WIDTH` | `1080` | Output video width |
+| `VIDEO_HEIGHT` | `1920` | Output video height (9:16 vertical) |
+| `VIDEO_FPS` | `30` | Output framerate |
+| `SKIP_COLOUR_GRADE` | `0` | Set `1` to skip color grading (faster CI) |
+
+## Security
+
+Never commit `.env` or OAuth credentials. All sensitive files are listed in `.gitignore`.
+
+## License
+
+[MIT](LICENSE) — Sai Kumar Nukala
