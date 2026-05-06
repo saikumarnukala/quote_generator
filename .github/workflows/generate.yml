@@ -1,11 +1,11 @@
 name: Generate & Publish Quote Video
 
-# ─── Schedule: 1 time daily (lunch break peak) ──────────────────────────
-# Times are UTC  →  IST = UTC + 5:30
-#   07:00 UTC = 12:30 PM IST  → lunch break peak engagement
+# ─── Schedule: 1 time daily (USA late morning peak) ──────────────────────────
+# Times are UTC  →  EDT = UTC−4  /  PDT = UTC−7
+#   15:00 UTC = 11:00 AM EDT / 8:00 AM PDT  → USA late morning
 on:
   schedule:
-    - cron: '0 7 * * *'    # 12:30 PM IST
+    - cron: '0 15 * * *'   # 11:00 AM EDT / 8:00 AM PDT
   workflow_dispatch:       # also allow manual trigger from GitHub UI
     inputs:
       topic:

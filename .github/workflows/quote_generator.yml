@@ -2,7 +2,7 @@ name: Quote Generator Pipeline
 
 on:
   schedule:
-    - cron: '0 7 * * *'    # 12:30 PM IST – lunch break peak
+    - cron: '0 15 * * *'   # 11:00 AM EDT / 8:00 AM PDT – USA late morning
   workflow_dispatch:
     inputs:
       topic:
