@@ -264,8 +264,11 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
         print(f"  Metadata generation failed ({e}) — using title as fallback.")
         yt_title = title[:90]
         yt_desc  = topic
-        yt_tags  = ["shorts", "quotes", "nature", "peaceful", "motivation"]
-        hashtags = "#shorts #quotes #peace"
+        yt_tags  = ["shorts", "quotes", "motivational quotes", "daily motivation",
+                    "inspirational quotes", "morning motivation", "life quotes",
+                    "mindfulness", "inner peace", "self improvement",
+                    "mental health", "positive mindset", "motivational shorts"]
+        hashtags = "#shorts #quotes #motivation #mindfulness #innerpeace"
 
     # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
     print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")

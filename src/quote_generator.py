@@ -58,7 +58,7 @@ def generate_quotes(topic: str, api_key: str, num_scenes: int = 7, language: str
 Generate exactly {num_scenes} visually stunning scenes. Return ONLY valid JSON — no markdown, no extra text.
 
 {{
-  "title": "a poetic, evocative video title in {lang_name} (max 6 words)",
+  "title": "a curiosity-driven, search-friendly YouTube title in {lang_name} — max 70 chars, use an emotional hook, question, or power number (e.g. '7 Words That Will Change How You See Life' or 'Why Silence Is the Greatest Gift You Can Give Yourself')",
   "theme": "{topic}",
   "scenes": [
     {{
