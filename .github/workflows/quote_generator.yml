@@ -1,8 +1,8 @@
 name: Quote Generator Pipeline
 
 on:
-  schedule:
-    - cron: '0 15 * * *'   # 11:00 AM EDT / 8:00 AM PDT – USA late morning
+  # Cron disabled — generate.yml is the active daily workflow.
+  # Use workflow_dispatch to trigger manually.
   workflow_dispatch:
     inputs:
       topic:
