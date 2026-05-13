@@ -80,6 +80,7 @@ jobs:
 
       # ── 6. Commit updated history back to repo (so next run skips used content) ──
       - name: Commit history
+        continue-on-error: true
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -93,10 +94,5 @@ jobs:
             git push
           fi
 
-      # ── 7. Keep video as downloadable artifact (backup) ───────────────
-      - name: Upload video artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: quote-video-${{ github.run_number }}
-          path: output/*.mp4
-          retention-days: 14
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
