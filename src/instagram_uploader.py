@@ -103,20 +103,17 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
         cmd += ["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo", "-shortest"]
 
     cmd += [
-        "-fflags",    "+genpts",
-        "-avoid_negative_ts", "make_zero",
-        "-vf",        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30",
+        "-vf",        "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2",
+        "-r",         "30",
         "-c:v",       "libx264",
-        "-profile:v", "main",
+        "-profile:v", "high",
         "-level:v",   "4.0",
         "-preset",    "fast",
         "-pix_fmt",   "yuv420p",
-        "-vsync",     "cfr",
-        "-bf",        "0",
-        "-b:v",       "3000k",
-        "-maxrate",   "3000k",
-        "-bufsize",   "6000k",
-        "-x264opts",  "keyint=60:min-keyint=60:no-scenecut",
+        "-b:v",       "3500k",
+        "-maxrate",   "4500k",
+        "-bufsize",   "9000k",
+        "-g",         "60",
         "-c:a",       "aac",
         "-ar",        "44100",
         "-ac",        "2",
@@ -128,7 +125,7 @@ def _transcode_for_instagram(src: str) -> tuple[str, bool]:
     try:
         result = subprocess.run(cmd, timeout=300, capture_output=True)
         if result.returncode == 0 and os.path.getsize(tmp) > 10_000:
-            print("  Instagram: re-encoded for compliance (main H.264 L4.0, CFR, faststart).")
+            print("  Instagram: re-encoded for compliance (high H.264 L4.0, 30fps, faststart).")
             return tmp, True
         print(f"  Instagram: FFmpeg transcode failed (rc={result.returncode}), uploading original.")
         if os.path.exists(tmp):
@@ -189,6 +186,7 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
         data={
             "media_type":    "REELS",
             "upload_type":   "resumable",
+            "share_to_feed": "true",
             "caption":       caption,
             "access_token":  token,
         },
@@ -239,11 +237,17 @@ def upload_to_instagram(video_path: str, caption: str) -> str | None:
     print(f"  Uploaded {file_size}/{file_size} bytes")
     print(f"  [debug] last chunk response: {up_code} {up_body[:400]}")
     if up_code not in (200, 201, 206):
-        if is_temp and os.path.exists(upload_path):
-            os.unlink(upload_path)
-        raise RuntimeError(
-            f"Instagram: video upload failed ({up_code}): {up_body}"
-        )
+        # Meta's ig-api-upload sometimes returns 400/ProcessingFailedError on the
+        # final chunk while the video IS accepted for server-side processing.
+        # Proceed to the container status poll rather than failing immediately.
+        if up_code == 400 and "ProcessingFailedError" in up_body:
+            print("  Instagram: 400 on final chunk — proceeding to container status poll.")
+        else:
+            if is_temp and os.path.exists(upload_path):
+                os.unlink(upload_path)
+            raise RuntimeError(
+                f"Instagram: video upload failed ({up_code}): {up_body}"
+            )
 
     if is_temp and os.path.exists(upload_path):
         os.unlink(upload_path)
