@@ -10,6 +10,7 @@ from moviepy.editor import (
     ImageClip,
     concatenate_videoclips,
     CompositeVideoClip,
+    CompositeAudioClip,
 )
 
 VIDEO_W = 1080
@@ -84,22 +85,20 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw    = ImageDraw.Draw(overlay)
 
-    # Place quote at the TOP so it is not covered by YouTube channel name / controls
-    strip_top    = 0
-    strip_bottom = total_h + pad_v * 2
-    draw.rectangle([0, strip_top, width, strip_bottom], fill=(0, 0, 0, 210))
-    # Decorative gold line at the bottom edge of the strip
-    draw.line([0, strip_bottom, width, strip_bottom], fill=(255, 220, 100, 140), width=2)
+    # Place quote vertically centered
+    start_y = (height - total_h) // 2
 
-    y = strip_top + pad_v
+    y = start_y
     for line in quote_lines:
         try:
             tw = draw.textbbox((0, 0), line, font=font)[2]
         except Exception:
             tw = len(line) * 18
         x = max(80, (width - tw) // 2)
-        draw.text((x + 2, y + 2), line, font=font,  fill=(0, 0, 0, 180))
-        draw.text((x,     y),     line, font=font,  fill=(255, 248, 210, 245))
+        # Strong drop shadow for readability
+        draw.text((x + 4, y + 4), line, font=font,  fill=(0, 0, 0, 200))
+        draw.text((x + 2, y + 2), line, font=font,  fill=(0, 0, 0, 200))
+        draw.text((x,     y),     line, font=font,  fill=(255, 250, 240, 255))
         y += line_h
 
     if author_line:
@@ -108,8 +107,9 @@ def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
         except Exception:
             tw = len(author_line) * 14
         x = max(80, (width - tw) // 2)
-        draw.text((x + 1, y + 1), author_line, font=q_font, fill=(0, 0, 0, 140))
-        draw.text((x,     y),     author_line, font=q_font, fill=(200, 200, 200, 220))
+        draw.text((x + 3, y + 3), author_line, font=q_font, fill=(0, 0, 0, 180))
+        draw.text((x + 1, y + 1), author_line, font=q_font, fill=(0, 0, 0, 180))
+        draw.text((x,     y),     author_line, font=q_font, fill=(220, 220, 220, 240))
 
     return np.array(overlay)
 
@@ -158,18 +158,17 @@ def _colour_grade(frame: np.ndarray) -> np.ndarray:
     """
     f = frame.astype(np.float32)
 
-    # Lift contrast slightly (S-curve approximation)
-    f = np.clip((f - 128) * 1.08 + 128, 0, 255)
+    # Dark Core Aesthetic: Crush shadows, lift contrast
+    f = np.clip((f - 128) * 1.15 + 100, 0, 255)
 
-    # Warm highlights: boost reds/yellows in bright areas
-    bright_mask = (f.mean(axis=2, keepdims=True) / 255.0)
-    f[:, :, 0] = np.clip(f[:, :, 0] + 6 * bright_mask[:, :, 0], 0, 255)
-    f[:, :, 1] = np.clip(f[:, :, 1] + 2 * bright_mask[:, :, 0], 0, 255)
+    # Desaturate slightly
+    gray = f.mean(axis=2, keepdims=True)
+    f = np.clip(f * 0.7 + gray * 0.3, 0, 255)
 
-    # Teal shadows: push blue/cyan into dark areas
-    shadow_mask = 1.0 - bright_mask
-    f[:, :, 2] = np.clip(f[:, :, 2] + 8 * shadow_mask[:, :, 0], 0, 255)
-    f[:, :, 1] = np.clip(f[:, :, 1] + 3 * shadow_mask[:, :, 0], 0, 255)
+    # Cool/Teal mood: push blue/cyan into dark areas
+    shadow_mask = 1.0 - (gray / 255.0)
+    f[:, :, 2] = np.clip(f[:, :, 2] + 15 * shadow_mask[:, :, 0], 0, 255)
+    f[:, :, 1] = np.clip(f[:, :, 1] + 5 * shadow_mask[:, :, 0], 0, 255)
 
     # Vignette — precompute once per shape to avoid reallocation every frame
     h, w = f.shape[:2]
@@ -177,7 +176,7 @@ def _colour_grade(frame: np.ndarray) -> np.ndarray:
     if key not in _vignette_cache:
         ys = np.linspace(-1, 1, h, dtype=np.float32).reshape(-1, 1)
         xs = np.linspace(-1, 1, w, dtype=np.float32).reshape(1, -1)
-        _vignette_cache[key] = np.clip(1.0 - 0.40 * (ys**2 + xs**2), 0.50, 1.0)[:, :, np.newaxis]
+        _vignette_cache[key] = np.clip(1.0 - 0.70 * (ys**2 + xs**2), 0.20, 1.0)[:, :, np.newaxis]
     f = f * _vignette_cache[key]
 
     return np.clip(f, 0, 255).astype(np.uint8)
@@ -190,39 +189,40 @@ _vignette_cache = {}
 # Build single scene from real footage
 # =====================================================================
 
-def _build_scene_clip(video_path: str, duration: float, scene_idx: int,
-                      overlay_rgba=None):
+def _build_scene_clip(video_paths, duration: float, scene_idx: int):
     """
-    Load a video or image, trim/extend to `duration`, crop to portrait,
-    apply colour grade and bake in quote overlay.
+    Load video(s), trim/extend to `duration`, crop to portrait, apply colour grade.
+    video_paths can be a string or a list of strings.
     """
-    if video_path.lower().endswith((".png", ".jpg", ".jpeg")):
-        raw = ImageClip(video_path).set_duration(duration)
+    paths = video_paths if isinstance(video_paths, list) else [video_paths]
+    sub_duration = duration / len(paths)
+    
+    subclips = []
+    for p in paths:
+        if p.lower().endswith((".png", ".jpg", ".jpeg")):
+            raw = ImageClip(p).set_duration(sub_duration)
+        else:
+            raw = VideoFileClip(p, audio=False)
+            
+        if raw.duration < sub_duration:
+            loops = math.ceil(sub_duration / raw.duration)
+            raw = concatenate_videoclips([raw] * loops)
+            
+        max_start = max(0.0, raw.duration - sub_duration)
+        start = (scene_idx * 3.7) % (max_start + 0.001)
+        start = min(start, max_start)
+        sub = raw.subclip(start, start + sub_duration)
+        subclips.append(sub)
+        
+    if len(subclips) > 1:
+        clip = concatenate_videoclips(subclips, method="compose")
     else:
-        raw = VideoFileClip(video_path, audio=False)
+        clip = subclips[0]
 
-    # Loop if clip is shorter than needed
-    if raw.duration < duration:
-        loops = math.ceil(duration / raw.duration)
-        raw   = concatenate_videoclips([raw] * loops)
-
-    # Varied but deterministic start offset
-    max_start = max(0.0, raw.duration - duration)
-    start     = (scene_idx * 3.7) % (max_start + 0.001)
-    start     = min(start, max_start)
-    clip      = raw.subclip(start, start + duration)
-
-    # Portrait crop
     clip = _fit_to_portrait(clip)
 
-    # Colour grade (skipped in CI if SKIP_COLOUR_GRADE=1 to save ~70% render time)
     if not os.environ.get("SKIP_COLOUR_GRADE"):
         clip = clip.fl_image(_colour_grade)
-
-    # Quote overlay
-    if overlay_rgba is not None:
-        overlay_img = ImageClip(overlay_rgba, ismask=False).set_duration(duration)
-        clip = CompositeVideoClip([clip, overlay_img])
 
     return clip.set_fps(FPS)
 
@@ -238,7 +238,7 @@ def build_video(
     music_path:     str = None,
     audio_paths:    list = None,
     quote_data:     list = None,
-    scene_duration: float = 12.0,
+    scene_duration: float | list = 12.0,
     # Legacy compat
     image_paths: list = None,
 ):
@@ -262,13 +262,40 @@ def build_video(
 
     for i, scene in enumerate(scenes):
         print(f"        Scene {i + 1}/{len(scenes)}")
-        overlay = None
+        sd = scene_duration[i] if isinstance(scene_duration, list) else scene_duration
+        clip = _build_scene_clip(video_paths[i], sd, i)
+        
+        # Apply chunked dynamic captions
         if quote_data and i < len(quote_data):
             q = quote_data[i]
-            overlay = _make_quote_overlay(VIDEO_W, VIDEO_H,
-                                          q.get("quote", q.get("narration", "")),
-                                          q.get("author", ""))
-        clip = _build_scene_clip(video_paths[i], scene_duration, i, overlay)
+            quote_text = q.get("quote", q.get("narration", ""))
+            author = q.get("author", "")
+            
+            words = quote_text.split()
+            # If the quote is very short, just show it all at once
+            if len(words) <= 5:
+                arr = _make_quote_overlay(VIDEO_W, VIDEO_H, quote_text, author)
+                if arr is not None:
+                    img_clip = ImageClip(arr, ismask=False).set_duration(sd)
+                    clip = CompositeVideoClip([clip, img_clip])
+            else:
+                # Chunk into groups of 3-4 words for dynamic reading
+                chunk_size = 4
+                chunks = [" ".join(words[j:j+chunk_size]) for j in range(0, len(words), chunk_size)]
+                chunk_duration = sd / len(chunks)
+                
+                overlay_clips = []
+                for j, chunk in enumerate(chunks):
+                    # Show author only on the final chunk
+                    auth = author if j == len(chunks) - 1 else ""
+                    arr = _make_quote_overlay(VIDEO_W, VIDEO_H, chunk, auth)
+                    if arr is not None:
+                        img_clip = ImageClip(arr, ismask=False).set_duration(chunk_duration)
+                        overlay_clips.append(img_clip)
+                        
+                if overlay_clips:
+                    text_clip = concatenate_videoclips(overlay_clips, method="compose").set_position("center")
+                    clip = CompositeVideoClip([clip, text_clip])
         
         # Attach per-scene audio if provided
         if audio_paths and i < len(audio_paths) and audio_paths[i]:
@@ -286,19 +313,26 @@ def build_video(
     else:
         final = scene_clips[0]
 
-    # Attach ambient music (or silent placeholder — Instagram requires AAC audio)
+    # Combine voiceover audio with ambient music (or silent placeholder)
+    audio_clips = []
+    if final.audio is not None:
+        audio_clips.append(final.audio)
+        
     if music_path and os.path.exists(music_path):
-        music = AudioFileClip(music_path).volumex(0.80).set_duration(final.duration)
-        final = final.set_audio(music)
-    else:
-        # Create a silent stereo AAC placeholder so the output always has an audio stream.
-        # Instagram's Reels API rejects video-only MP4s with ProcessingFailedError.
+        # Background music volume is lowered so voiceover is clear
+        music = AudioFileClip(music_path).volumex(0.20).set_duration(final.duration)
+        audio_clips.append(music)
+    elif final.audio is None:
+        # Create a silent stereo AAC placeholder so the output always has an audio stream
         silent = AudioClip(
             lambda t: np.zeros((2,)),
             duration=final.duration,
             fps=44100,
         )
-        final = final.set_audio(silent)
+        audio_clips.append(silent)
+
+    if audio_clips:
+        final = final.set_audio(CompositeAudioClip(audio_clips))
 
     final.write_videofile(
         output_path,

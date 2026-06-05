@@ -67,6 +67,7 @@ jobs:
           YT_REFRESH_TOKEN:       ${{ secrets.YT_REFRESH_TOKEN }}
           INSTAGRAM_USER_ID:      ${{ secrets.INSTAGRAM_USER_ID }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          DEEPGRAM_API_KEY:       ${{ secrets.DEEPGRAM_API_KEY }}
         run: |
           TOPIC="${{ github.event.inputs.topic }}"
           SCENES="${{ github.event.inputs.scenes || '7' }}"

@@ -25,6 +25,7 @@ load_dotenv()
 
 from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, PIXABAY_API_KEY, OUTPUT_DIR, TEMP_DIR
 from src.quote_generator import generate_quotes, generate_video_metadata
+from src.audio_generator import generate_audio, get_audio_duration
 from src.video_fetcher import fetch_nature_video
 from src.ambient_generator import generate_ambient
 from src.music_fetcher import fetch_trending_music
@@ -201,7 +202,7 @@ def _upload_with_retry(platform: str, fn, retries: int = 3, delay: int = 30):
     return None
 
 
-def run(topic: str = None, num_scenes: int = 7, language: str = "en",
+def run(topic: str = None, num_scenes: int = 4, language: str = "en",
         music_path: str = None, jamendo_music: bool = False,
         allow_jamendo_upload: bool = False) -> str:
     _check_env()
@@ -271,33 +272,62 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
         hashtags = "#shorts #quotes #motivation #mindfulness #innerpeace"
 
     # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
-    print("\n[ 2/3 ] Fetching real nature footage (Pexels)...")
+    print("\n[ 2/3 ] Fetching real nature footage (Pexels) and Voiceover...")
     video_paths = []
+    audio_paths = []
+    scene_durations = []
     this_run_video_ids = {}  # dict: scene_idx -> vid_id (safe for re-downloads)
     for i, scene in enumerate(scenes):
         print(f"        Scene {i + 1}/{len(scenes)}...")
-        vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.mp4")
-        search   = scene.get("video_search", scene.get("location", "peaceful nature"))
-        fetched_path = vid_path
-        vid_id = 0
-        for _attempt in range(3):
-            try:
-                fetched_path, vid_id = fetch_nature_video(
-                    search, PEXELS_API_KEY, vid_path,
-                    used_ids=used_video_ids | set(this_run_video_ids.values()),
-                )
-                break
-            except Exception as e:
-                print(f"        Scene {i+1} fetch attempt {_attempt+1}/3 failed: {e}")
-                time.sleep(5)
-        video_paths.append(fetched_path)
-        if vid_id:
-            this_run_video_ids[i] = vid_id
-            used_video_ids.add(vid_id)
-        print(f"        Scene {i + 1} done")
+        
+        # 1. Generate Voiceover Audio
+        text_to_speak = scene.get("quote", scene.get("narration", ""))
+        audio_out = os.path.join(TEMP_DIR, f"audio_{i + 1:02d}.mp3")
+        try:
+            # Alternate between the two best Deepgram Aura voices for each scene
+            voice_choice = "aura-orion-en" if i % 2 == 0 else "aura-asteria-en"
+            
+            generate_audio(text_to_speak, audio_out, voice=voice_choice, lang=language)
+                
+            audio_paths.append(audio_out)
+            # Make the scene 0.8s longer than the spoken audio for visual breathing room
+            duration = get_audio_duration(audio_out) + 0.8
+            scene_durations.append(duration)
+        except Exception as e:
+            print(f"        Scene {i+1} audio generation failed: {e}")
+            audio_paths.append(None)
+            scene_durations.append(SCENE_DURATION)
+
+        # 2. Fetch Video Footage
+        scene_video_paths = []
+        searches = scene.get("video_searches", [scene.get("video_search", "dark cinematic nature")])
+        if isinstance(searches, str):
+            searches = [searches]
+            
+        for sub_i, search in enumerate(searches[:3]):
+            vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}_sub_{sub_i+1:02d}.mp4")
+            fetched_path = vid_path
+            vid_id = 0
+            for _attempt in range(3):
+                try:
+                    fetched_path, vid_id = fetch_nature_video(
+                        search, PEXELS_API_KEY, vid_path,
+                        used_ids=used_video_ids | set(this_run_video_ids.values()),
+                    )
+                    break
+                except Exception as e:
+                    print(f"        Scene {i+1} fetch attempt {_attempt+1}/3 failed: {e}")
+                    time.sleep(5)
+            scene_video_paths.append(fetched_path)
+            if vid_id:
+                this_run_video_ids[f"{i}_{sub_i}"] = vid_id
+                used_video_ids.add(vid_id)
+                
+        video_paths.append(scene_video_paths)
+        print(f"        Scene {i + 1} done (fetched {len(scene_video_paths)} clips)")
 
     # ── Step 3 / 3 · Fetch music, copyright-check, then build video ──────
-    total_duration = SCENE_DURATION * len(scenes)
+    total_duration = sum(scene_durations) if scene_durations else SCENE_DURATION * len(scenes)
 
     user_provided_music = music_path is not None  # remember before the path may be overwritten
 
@@ -383,8 +413,9 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
             video_paths    = video_paths,
             output_path    = output,
             music_path     = music_path,
+            audio_paths    = audio_paths,
             quote_data     = scenes,
-            scene_duration = SCENE_DURATION,
+            scene_duration = scene_durations,
         )
     except Exception as e:
         print(f"  Video build failed ({e}) — retrying without music as fallback...")
@@ -395,8 +426,9 @@ def run(topic: str = None, num_scenes: int = 7, language: str = "en",
                 video_paths    = video_paths,
                 output_path    = output,
                 music_path     = None,
+                audio_paths    = audio_paths,
                 quote_data     = scenes,
-                scene_duration = SCENE_DURATION,
+                scene_duration = scene_durations,
             )
             print("  Fallback build (no music) succeeded.")
         except Exception as e2:
@@ -477,7 +509,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Peaceful Quotes Video Generator")
     parser.add_argument("topic", nargs="*", help="Quote theme (optional — auto-rotates if omitted)")
-    parser.add_argument("--scenes",  type=int, default=7,   help="Number of scenes (default: 7)")
+    parser.add_argument("--scenes",  type=int, default=4,   help="Number of scenes (default: 4)")
     parser.add_argument("--lang",    default="en",
                         choices=list(LANGUAGE_NAMES.keys()),
                         help="Language: en, te (Telugu), hi (Hindi), ta (Tamil), ja (Japanese)")

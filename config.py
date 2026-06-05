@@ -8,6 +8,7 @@ HF_TOKEN           = os.getenv("HF_TOKEN")
 PEXELS_API_KEY     = os.getenv("PEXELS_API_KEY")
 JAMENDO_CLIENT_ID  = os.getenv("JAMENDO_CLIENT_ID", "")
 PIXABAY_API_KEY    = os.getenv("PIXABAY_API_KEY", "")
+DEEPGRAM_API_KEY   = os.getenv("DEEPGRAM_API_KEY")
 
 # YouTube upload (optional — leave blank to skip)
 YT_CLIENT_ID      = os.getenv("YT_CLIENT_ID")

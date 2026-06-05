@@ -63,7 +63,7 @@ Generate exactly {num_scenes} visually stunning scenes. Return ONLY valid JSON �
   "scenes": [
     {{
       "location": "short beautiful location name in {lang_name}",
-      "video_search": "3-5 hyper-specific English words for Pexels search — cinematic quality",
+      "video_searches": ["Array of 3 distinct hyper-specific English search queries for Pexels. They MUST be dark, moody, cinematic aesthetics (e.g. 'rain against window dark')"],
       "quote": "a deeply moving, soul-stirring quote in {lang_name}",
       "author": "ONLY public-domain authors (died before 1928) such as Rumi, Lao Tzu, Marcus Aurelius, Khalil Gibran, Rabindranath Tagore, Walt Whitman, Nikola Tesla, Abraham Lincoln, Epictetus, Seneca — OR use 'Ancient Wisdom' / 'Unknown'. NEVER use living authors or anyone who died after 1927.",
       "narration": "2-3 sentences in {lang_name} — poetic, intimate, like a whisper to the soul"
@@ -72,9 +72,10 @@ Generate exactly {num_scenes} visually stunning scenes. Return ONLY valid JSON �
 }}
 
 Rules:
-- video_search MUST always be in English only — be ULTRA SPECIFIC and cinematic:
-  GOOD: "aerial misty mountain forest sunrise", "slow motion rain drops leaves macro", "golden hour ocean waves drone", "4k timelapse northern lights aurora", "underwater coral reef sunlight rays"
-  BAD: "nature", "peaceful video", "nice scenery"
+- THE FIRST SCENE MUST BE A HOOK: The `quote` and `narration` for the very first scene MUST be an attention-grabbing hook targeting a specific emotional pain point (e.g. "Listen to this if you are struggling to move on from a breakup" or "3 ancient quotes you need to hear if you feel completely lost in life"). Do NOT use a regular quote for the first scene.
+- video_searches MUST always be an array of 3 distinct, ultra-specific English queries per scene. They MUST follow a DARK CORE, MOODY AESTHETIC.
+  GOOD: "rain against glass window night", "dark foggy forest drone", "lonely street light rain", "stormy ocean waves slow motion", "driving at night blurry lights"
+  BAD: "nature", "sunny mountains", "bright flowers", "peaceful daylight"
 - All other fields (title, location, quote, author, narration) MUST be in {lang_name}
 - Quotes: Mix these styles across scenes:
   * Profound philosophical wisdom (Rumi, Lao Tzu, Marcus Aurelius, Seneca, Epictetus)
@@ -85,9 +86,9 @@ Rules:
 - CRITICAL copyright rule: author field must ONLY be a person who died before 1928 (public domain),
   or the literal string 'Ancient Wisdom' or 'Unknown'. NEVER attribute quotes to Maya Angelou,
   Paulo Coelho, Eckhart Tolle, Brené Brown, or any other living or recently deceased author.
-- video_search: Use CINEMATIC search terms — aerial shots, golden hour, slow motion, timelapse, macro close-up, drone footage, 4k nature
-  Vary across: misty mountains, bioluminescent ocean, northern lights, cherry blossom snowfall, volcanic landscape, underwater cave, dense rainforest canopy, ice cave glacier, desert sand dunes sunset, fireflies forest night
-- Each scene should feel like a breathtaking moment frozen in time
+- video_searches: Use DARK CINEMATIC search terms — rain, night, fog, storm, dark ocean, solitary environments.
+  Vary across: stormy oceans, dark rainy streets, foggy pine forests, moonlight on water, lonely roads at night.
+- Each scene should feel emotionally heavy but ultimately comforting.
 - narration: intimate and poetic — as if speaking directly to one person's soul, not a crowd"""
 
     model_candidates = [

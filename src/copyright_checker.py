@@ -108,9 +108,10 @@ def check_music(music_info: dict) -> tuple[bool, str]:
     return ok, reason
 
 
-def check_videos(video_paths: list[str]) -> tuple[bool, list[int]]:
+def check_videos(video_paths: list) -> tuple[bool, list[int]]:
     """
     Verify all downloaded Pexels clips exist and are non-empty.
+    Handles both flat lists [path1, path2] and nested lists [[path1a, path1b], [path2]].
     Pexels is CC0 by ToS so no per-file license check is needed.
 
     Returns:
@@ -118,13 +119,22 @@ def check_videos(video_paths: list[str]) -> tuple[bool, list[int]]:
         (False, [idx, ...])      — list of 0-based indices that failed
     """
     failed = []
-    for i, path in enumerate(video_paths):
-        if not path or not os.path.exists(path):
-            print(f"  [Copyright] Video scene {i+1}: FILE MISSING — {path}")
+    for i, scene_paths in enumerate(video_paths):
+        if isinstance(scene_paths, str):
+            scene_paths = [scene_paths]
+            
+        scene_ok = True
+        for path in scene_paths:
+            if not path or not os.path.exists(path):
+                print(f"  [Copyright] Video scene {i+1}: FILE MISSING — {path}")
+                scene_ok = False
+            elif os.path.getsize(path) < 10_000:
+                print(f"  [Copyright] Video scene {i+1}: file too small (corrupted?) — {path}")
+                scene_ok = False
+        
+        if not scene_ok:
             failed.append(i)
-        elif os.path.getsize(path) < 10_000:
-            print(f"  [Copyright] Video scene {i+1}: file too small (corrupted?) — {path}")
-            failed.append(i)
+            
     if not failed:
-        print(f"  [Copyright] All {len(video_paths)} video clips OK (Pexels CC0).")
+        print(f"  [Copyright] All {len(video_paths)} scenes have OK video clips (Pexels CC0).")
     return (len(failed) == 0), failed
