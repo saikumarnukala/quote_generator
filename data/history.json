@@ -767,20 +767,51 @@
       "video_duration": 26.4,
       "youtube_video_id": null,
       "upload_status": "local_only"
+    },
+    {
+      "run_id": "run_1791690225",
+      "timestamp": "2026-10-11T03:43:45Z",
+      "topic": "How the James Webb Space Telescope Sees the Early Universe",
+      "normalized_topic": "how the james webb space telescope sees the early universe",
+      "category": "space",
+      "title": "The Shocking Truth About How the James Webb Space Telescope Sees the Early Unive",
+      "script_summary": "Have you ever wondered what makes How the James Webb Space Telescope Sees the Early Universe so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: How the James Webb Space Telescope Sees the Early Universe",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=How%20the%20James%20Webb%20Space%20Telescope%20Sees%20the%20Early%20Universe"
+        }
+      ],
+      "visual_asset_ids": [
+        "30450505",
+        "14618955",
+        "34729856"
+      ],
+      "music_track": "Stellar Drift",
+      "output_video": "How_the_James_Webb_Space_Telescope_Sees_the_Early__20261011_091311.mp4",
+      "video_duration": 28.83,
+      "youtube_video_id": null,
+      "upload_status": "local_only"
     }
   ],
   "topics": [
-    "Why Does Ice Float on Water?"
+    "Why Does Ice Float on Water?",
+    "How the James Webb Space Telescope Sees the Early Universe"
   ],
   "normalized_topics": [
-    "why does ice float on water"
+    "why does ice float on water",
+    "how the james webb space telescope sees the early universe"
   ],
   "asset_ids": [
-    "36298433",
     "10239476",
+    "36298433",
+    "30450505",
+    "34729856",
+    "14618955",
     "7687805"
   ],
   "music_tracks": [
-    "Cinematic Pulse"
+    "Cinematic Pulse",
+    "Stellar Drift"
   ]
 }
