@@ -305,8 +305,8 @@ def run_pipeline(
         else:
             upload_status = "skipped"
 
-    # Instagram upload
-    if upload_instagram or INSTAGRAM_UPLOAD_ENABLED or dry_run:
+    # Instagram upload (only when explicitly requested)
+    if upload_instagram or INSTAGRAM_UPLOAD_ENABLED:
         print("\n[ Upload ] Processing Instagram Reels upload...")
         ig_caption = f"{meta['title']}\n\n{meta['description'][:500]}\n\n{' '.join(meta['hashtags'])}"
         ig_url = upload_to_instagram(
