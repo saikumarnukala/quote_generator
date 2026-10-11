@@ -19,7 +19,7 @@ YT_CLIENT_ID           = os.getenv("YT_CLIENT_ID", "").strip()
 YT_CLIENT_SECRET       = os.getenv("YT_CLIENT_SECRET", "").strip()
 YT_REFRESH_TOKEN       = os.getenv("YT_REFRESH_TOKEN", "").strip()
 YOUTUBE_UPLOAD_ENABLED = os.getenv("YOUTUBE_UPLOAD_ENABLED", "false").lower() in ("true", "1", "yes")
-YOUTUBE_PRIVACY_STATUS = os.getenv("YOUTUBE_PRIVACY_STATUS", "private").strip()
+YOUTUBE_PRIVACY_STATUS = os.getenv("YOUTUBE_PRIVACY_STATUS", "public").strip()
 
 # --- Instagram Upload Settings (Optional / Disabled by default) ---
 INSTAGRAM_USER_ID        = os.getenv("INSTAGRAM_USER_ID", "").strip()

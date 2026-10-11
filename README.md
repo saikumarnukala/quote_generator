@@ -321,19 +321,30 @@ python -m unittest discover tests
 
 ---
 
-## GitHub Actions CI/CD
+## GitHub Actions CI/CD & Automated Daily Publishing
 
-The workflow in `.github/workflows/generate.yml` supports manual execution via GitHub's `workflow_dispatch` interface:
+The workflow in `.github/workflows/generate.yml` runs **automatically every day** and also supports on-demand execution:
 
+### 1. Automated Daily Schedule
+- **Schedule**: Triggers daily at `13:00 UTC` (`6:30 PM IST` / `9:00 AM EDT` / `2:00 PM BST`).
+- **Timing Rationale**: Globally recognized peak engagement window for YouTube Shorts audiences, capturing evening peak in Asia, lunch/afternoon in Europe, and morning peak in the Americas.
+- **Behavior**:
+  - Automatically selects a fresh topic from rotating categories (`science`, `space`, `technology`, `history`, `ai`, `geography`, `engineering`, `everyday_science`).
+  - Ensures no recently used topic is repeated (tracked via `data/history.json`).
+  - Publishes directly to YouTube with **public** visibility.
+  - Automatically updates and commits `data/history.json` back to GitHub.
+
+### 2. Manual On-Demand Execution
 1. Navigate to **Actions > Infotainment Video Automation**.
 2. Click **Run workflow**.
-3. Configure:
-   - `topic`: (Optional custom topic)
+3. Configure optional overrides:
+   - `topic`: (Leave empty for automatic selection, or type custom topic)
    - `category`: (e.g. `science`, `space`, `technology`, `history`)
    - `scenes`: Number of scenes (default: 4)
+   - `privacy`: `public`, `unlisted`, or `private` (default: `public`)
+   - `upload`: `true` or `false` (default: `true`)
    - `dry_run`: `true` or `false`
-   - `upload`: `true` or `false`
-4. Download the generated MP4, thumbnail, and metadata directly from the **Artifacts** section.
+4. The generated MP4 video, thumbnail, and metadata are archived in GitHub Actions **Artifacts** for 7 days.
 
 ---
 

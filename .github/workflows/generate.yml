@@ -1,6 +1,10 @@
 name: Infotainment Video Automation
 
 on:
+  schedule:
+    # Run daily at 13:00 UTC (6:30 PM IST / 9:00 AM EDT / 2:00 PM BST)
+    # Globally recognized peak engagement window for YouTube Shorts
+    - cron: '0 13 * * *'
   workflow_dispatch:
     inputs:
       topic:
@@ -27,18 +31,27 @@ on:
         description: 'Number of scenes (default: 4)'
         required: false
         default: '4'
+      privacy:
+        description: 'YouTube upload privacy status'
+        required: false
+        default: 'public'
+        type: choice
+        options:
+          - public
+          - unlisted
+          - private
       dry_run:
         description: 'Simulate without consuming external paid upload quota'
         required: false
         type: boolean
         default: false
       upload:
-        description: 'Enable YouTube upload (uploads with private visibility)'
+        description: 'Enable YouTube upload'
         required: false
         type: boolean
-        default: false
+        default: true
       upload_instagram:
-        description: 'Enable Instagram Reels upload'
+        description: 'Enable Instagram Reels upload (currently off)'
         required: false
         type: boolean
         default: false
@@ -100,27 +113,40 @@ jobs:
           INSTAGRAM_USER_ID:      ${{ secrets.INSTAGRAM_USER_ID }}
           INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
         run: |
-          TOPIC="${{ github.event.inputs.topic }}"
-          CATEGORY="${{ github.event.inputs.category || 'science' }}"
-          SCENES="${{ github.event.inputs.scenes || '4' }}"
-          EXTRA_ARGS=""
+          EVENT="${{ github.event_name }}"
 
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --dry-run"
-          fi
-
-          if [ "${{ github.event.inputs.upload_all }}" = "true" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --upload-all"
-          elif [ "${{ github.event.inputs.upload }}" = "true" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --upload"
-          elif [ "${{ github.event.inputs.upload_instagram }}" = "true" ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --upload-instagram"
-          fi
-
-          if [ -n "$TOPIC" ]; then
-            python main.py "$TOPIC" --category "$CATEGORY" --scenes "$SCENES" $EXTRA_ARGS
+          if [ "$EVENT" = "schedule" ]; then
+            echo "=========================================================="
+            echo "  AUTOMATED DAILY PRODUCTION RUN (PUBLIC YOUTUBE SHORTS)  "
+            echo "=========================================================="
+            python main.py --scenes 4 --upload --privacy public
           else
-            python main.py --category "$CATEGORY" --scenes "$SCENES" $EXTRA_ARGS
+            echo "=========================================================="
+            echo "  MANUAL WORKFLOW RUN                                    "
+            echo "=========================================================="
+            TOPIC="${{ github.event.inputs.topic }}"
+            CATEGORY="${{ github.event.inputs.category || 'science' }}"
+            SCENES="${{ github.event.inputs.scenes || '4' }}"
+            PRIVACY="${{ github.event.inputs.privacy || 'public' }}"
+            EXTRA_ARGS=""
+
+            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --dry-run"
+            fi
+
+            if [ "${{ github.event.inputs.upload_all }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --upload-all --privacy $PRIVACY"
+            elif [ "${{ github.event.inputs.upload }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --upload --privacy $PRIVACY"
+            elif [ "${{ github.event.inputs.upload_instagram }}" = "true" ]; then
+              EXTRA_ARGS="$EXTRA_ARGS --upload-instagram"
+            fi
+
+            if [ -n "$TOPIC" ]; then
+              python main.py "$TOPIC" --category "$CATEGORY" --scenes "$SCENES" $EXTRA_ARGS
+            else
+              python main.py --category "$CATEGORY" --scenes "$SCENES" $EXTRA_ARGS
+            fi
           fi
 
       - name: Commit updated run history
