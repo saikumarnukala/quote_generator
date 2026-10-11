@@ -792,25 +792,58 @@
       "video_duration": 28.83,
       "youtube_video_id": null,
       "upload_status": "local_only"
+    },
+    {
+      "run_id": "run_1791690541",
+      "timestamp": "2026-10-11T03:49:01Z",
+      "topic": "The Science Behind Bioluminescent Creatures in Deep Oceans",
+      "normalized_topic": "the science behind bioluminescent creatures in deep oceans",
+      "category": "science",
+      "title": "The Shocking Truth About The Science Behind Bioluminescent Creatures in Deep Oce",
+      "script_summary": "Have you ever wondered what makes The Science Behind Bioluminescent Creatures in Deep Oceans so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: The Science Behind Bioluminescent Creatures in Deep Oceans",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=The%20Science%20Behind%20Bioluminescent%20Creatures%20in%20Deep%20Oceans"
+        }
+      ],
+      "visual_asset_ids": [
+        "31314196",
+        "35611371",
+        "28156100",
+        "25935025"
+      ],
+      "music_track": "none",
+      "output_video": "The_Science_Behind_Bioluminescent_Creatures_in_Dee_20261011_034800.mp4",
+      "video_duration": 36.97,
+      "youtube_video_id": null,
+      "upload_status": "local_only"
     }
   ],
   "topics": [
     "Why Does Ice Float on Water?",
-    "How the James Webb Space Telescope Sees the Early Universe"
+    "How the James Webb Space Telescope Sees the Early Universe",
+    "The Science Behind Bioluminescent Creatures in Deep Oceans"
   ],
   "normalized_topics": [
+    "the science behind bioluminescent creatures in deep oceans",
     "why does ice float on water",
     "how the james webb space telescope sees the early universe"
   ],
   "asset_ids": [
-    "10239476",
-    "36298433",
-    "30450505",
+    "7687805",
     "34729856",
+    "25935025",
+    "36298433",
     "14618955",
-    "7687805"
+    "31314196",
+    "28156100",
+    "30450505",
+    "35611371",
+    "10239476"
   ],
   "music_tracks": [
+    "none",
     "Cinematic Pulse",
     "Stellar Drift"
   ]
