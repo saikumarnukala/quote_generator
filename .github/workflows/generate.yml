@@ -37,6 +37,16 @@ on:
         required: false
         type: boolean
         default: false
+      upload_instagram:
+        description: 'Enable Instagram Reels upload'
+        required: false
+        type: boolean
+        default: false
+      upload_all:
+        description: 'Enable both YouTube and Instagram Reels upload'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -80,13 +90,15 @@ jobs:
 
       - name: Generate Infotainment Video
         env:
-          GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
-          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
-          PEXELS_API_KEY:   ${{ secrets.PEXELS_API_KEY }}
-          PIXABAY_API_KEY:  ${{ secrets.PIXABAY_API_KEY }}
-          YT_CLIENT_ID:     ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          GROQ_API_KEY:           ${{ secrets.GROQ_API_KEY }}
+          DEEPGRAM_API_KEY:       ${{ secrets.DEEPGRAM_API_KEY }}
+          PEXELS_API_KEY:         ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY:        ${{ secrets.PIXABAY_API_KEY }}
+          YT_CLIENT_ID:           ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET:       ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN:       ${{ secrets.YT_REFRESH_TOKEN }}
+          INSTAGRAM_USER_ID:      ${{ secrets.INSTAGRAM_USER_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
         run: |
           TOPIC="${{ github.event.inputs.topic }}"
           CATEGORY="${{ github.event.inputs.category || 'science' }}"
@@ -97,8 +109,12 @@ jobs:
             EXTRA_ARGS="$EXTRA_ARGS --dry-run"
           fi
 
-          if [ "${{ github.event.inputs.upload }}" = "true" ]; then
+          if [ "${{ github.event.inputs.upload_all }}" = "true" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --upload-all"
+          elif [ "${{ github.event.inputs.upload }}" = "true" ]; then
             EXTRA_ARGS="$EXTRA_ARGS --upload"
+          elif [ "${{ github.event.inputs.upload_instagram }}" = "true" ]; then
+            EXTRA_ARGS="$EXTRA_ARGS --upload-instagram"
           fi
 
           if [ -n "$TOPIC" ]; then

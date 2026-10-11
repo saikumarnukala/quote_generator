@@ -270,10 +270,34 @@ python main.py "Black Holes" --music assets/music/space/stellar_drift.wav
 python main.py "The Boötes Void" --dry-run
 ```
 
-### 6. Upload to YouTube (Private Visibility)
+### 6. Upload to YouTube & Instagram
+Uploads are disabled by default to prevent accidental publishing.
+
 ```bash
+# Upload to YouTube only (private by default)
 python main.py "How CRISPR Works" --category science --upload --privacy private
+
+# Upload to Instagram Reels only
+python main.py "How CRISPR Works" --category science --upload-instagram
+
+# Upload to both platforms simultaneously
+python main.py "How CRISPR Works" --category science --upload-all
 ```
+
+### 7. Refreshing API & OAuth Credentials
+If uploads fail with `invalid_grant` (YouTube) or `OAuthException 190` (Instagram), refresh your tokens:
+
+- **YouTube Refresh Token**:
+  Run the local OAuth helper script and authenticate in your browser:
+  ```bash
+  python scripts/get_youtube_token.py --json-file client_secret_*.json
+  ```
+  Copy the printed `refresh_token` into your `.env` as `YT_REFRESH_TOKEN` and update your GitHub secret `YT_REFRESH_TOKEN`.
+- **Instagram Access Token**:
+  1. Open [Meta Graph API Explorer](https://developers.facebook.com/tools/explorer/).
+  2. Select your Meta App and generate a User Token with permissions: `instagram_basic`, `instagram_content_publish`, `pages_read_engagement`, `pages_show_list`.
+  3. Exchange it for a long-lived 60-day token via Access Token Tool or Graph API.
+  4. Update `INSTAGRAM_ACCESS_TOKEN` in your `.env` and GitHub secret `INSTAGRAM_ACCESS_TOKEN`.
 
 ---
 

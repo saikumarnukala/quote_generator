@@ -21,6 +21,11 @@ YT_REFRESH_TOKEN       = os.getenv("YT_REFRESH_TOKEN", "").strip()
 YOUTUBE_UPLOAD_ENABLED = os.getenv("YOUTUBE_UPLOAD_ENABLED", "false").lower() in ("true", "1", "yes")
 YOUTUBE_PRIVACY_STATUS = os.getenv("YOUTUBE_PRIVACY_STATUS", "private").strip()
 
+# --- Instagram Upload Settings (Optional / Disabled by default) ---
+INSTAGRAM_USER_ID        = os.getenv("INSTAGRAM_USER_ID", "").strip()
+INSTAGRAM_ACCESS_TOKEN   = os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip()
+INSTAGRAM_UPLOAD_ENABLED = os.getenv("INSTAGRAM_UPLOAD_ENABLED", "false").lower() in ("true", "1", "yes")
+
 # --- Video Specs: 9:16 vertical (1080x1920 @ 30fps) ---
 VIDEO_WIDTH  = int(os.getenv("VIDEO_WIDTH", "1080"))
 VIDEO_HEIGHT = int(os.getenv("VIDEO_HEIGHT", "1920"))

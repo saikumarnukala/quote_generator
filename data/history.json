@@ -818,33 +818,62 @@
       "video_duration": 36.97,
       "youtube_video_id": null,
       "upload_status": "local_only"
+    },
+    {
+      "run_id": "run_1791691063",
+      "timestamp": "2026-10-11T03:57:43Z",
+      "topic": "How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago",
+      "normalized_topic": "how the antikythera mechanism predicted eclipses 2000 years ago",
+      "category": "history",
+      "title": "The Shocking Truth About How the Antikythera Mechanism Predicted Eclipses 2000 Y",
+      "script_summary": "Have you ever wondered what makes How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=How%20the%20Antikythera%20Mechanism%20Predicted%20Eclipses%202000%20Years%20Ago"
+        }
+      ],
+      "visual_asset_ids": [
+        "39149890",
+        "8721929"
+      ],
+      "music_track": "Ancient Echoes",
+      "output_video": "How_the_Antikythera_Mechanism_Predicted_Eclipses_2_20261011_092733.mp4",
+      "video_duration": 18.0,
+      "youtube_video_id": "mock_1791691063",
+      "upload_status": "uploaded"
     }
   ],
   "topics": [
     "Why Does Ice Float on Water?",
     "How the James Webb Space Telescope Sees the Early Universe",
-    "The Science Behind Bioluminescent Creatures in Deep Oceans"
+    "The Science Behind Bioluminescent Creatures in Deep Oceans",
+    "How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago"
   ],
   "normalized_topics": [
     "the science behind bioluminescent creatures in deep oceans",
+    "how the james webb space telescope sees the early universe",
     "why does ice float on water",
-    "how the james webb space telescope sees the early universe"
+    "how the antikythera mechanism predicted eclipses 2000 years ago"
   ],
   "asset_ids": [
-    "7687805",
-    "34729856",
-    "25935025",
-    "36298433",
-    "14618955",
-    "31314196",
-    "28156100",
-    "30450505",
+    "10239476",
+    "39149890",
     "35611371",
-    "10239476"
+    "31314196",
+    "8721929",
+    "14618955",
+    "7687805",
+    "30450505",
+    "28156100",
+    "36298433",
+    "25935025",
+    "34729856"
   ],
   "music_tracks": [
-    "none",
     "Cinematic Pulse",
-    "Stellar Drift"
+    "Stellar Drift",
+    "none",
+    "Ancient Echoes"
   ]
 }

@@ -50,9 +50,11 @@ from config import (
     TEMP_DIR,
     YOUTUBE_PRIVACY_STATUS,
     YOUTUBE_UPLOAD_ENABLED,
+    INSTAGRAM_UPLOAD_ENABLED,
 )
 from src.audio_generator import generate_audio, get_audio_duration
 from src.copyright_checker import check_music_track_licensing, check_visual_assets_integrity
+from src.instagram_uploader import upload_to_instagram
 from src.history import (
     get_used_asset_ids,
     get_used_music_tracks,
@@ -90,6 +92,7 @@ def run_pipeline(
     music_volume: float = 0.16,
     dry_run: bool = False,
     upload: bool = False,
+    upload_instagram: bool = False,
     privacy: Optional[str] = None,
     output_custom: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -279,10 +282,12 @@ def run_pipeline(
         json.dump(meta, f, indent=2, ensure_ascii=False)
     print(f"  [Metadata] Saved YouTube metadata -> {meta_path}")
 
-    # ── 11. Optional YouTube Upload ─────────────────────────────────────
+    # ── 11. Optional YouTube & Instagram Uploads ────────────────────────
     yt_url, yt_id = None, None
+    ig_url = None
     upload_status = "local_only"
 
+    # YouTube upload
     if upload or YOUTUBE_UPLOAD_ENABLED or dry_run:
         print("\n[ Upload ] Processing YouTube upload...")
         yt_url, yt_id = upload_to_youtube(
@@ -299,6 +304,19 @@ def run_pipeline(
             print(f"        YouTube URL: {yt_url}")
         else:
             upload_status = "skipped"
+
+    # Instagram upload
+    if upload_instagram or INSTAGRAM_UPLOAD_ENABLED or dry_run:
+        print("\n[ Upload ] Processing Instagram Reels upload...")
+        ig_caption = f"{meta['title']}\n\n{meta['description'][:500]}\n\n{' '.join(meta['hashtags'])}"
+        ig_url = upload_to_instagram(
+            video_path=final_output_path,
+            caption=ig_caption,
+            dry_run=dry_run,
+            force_upload=upload_instagram or INSTAGRAM_UPLOAD_ENABLED,
+        )
+        if ig_url:
+            print(f"        Instagram URL: {ig_url}")
 
     # ── 12. Record Run History ──────────────────────────────────────────
     record_infotainment_run(
@@ -323,6 +341,8 @@ def run_pipeline(
     print(f"  Duration  : {report.duration_seconds:.1f}s")
     if yt_url:
         print(f"  YouTube   : {yt_url}")
+    if ig_url:
+        print(f"  Instagram : {ig_url}")
     print("=" * 65 + "\n")
 
     return {
@@ -333,6 +353,7 @@ def run_pipeline(
         "topic": chosen_topic,
         "category": chosen_category,
         "youtube_url": yt_url,
+        "instagram_url": ig_url,
     }
 
 
@@ -348,12 +369,16 @@ def main():
     parser.add_argument("--music-volume", type=float, default=0.16, help="Background music mix volume (0.05 - 0.40)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate upload and external actions without quota use")
     parser.add_argument("--upload", action="store_true", help="Explicitly enable YouTube upload (disabled by default)")
+    parser.add_argument("--upload-instagram", action="store_true", help="Explicitly enable Instagram Reels upload (disabled by default)")
+    parser.add_argument("--upload-all", action="store_true", help="Enable upload to both YouTube and Instagram")
     parser.add_argument("--privacy", choices=["private", "unlisted", "public"], default=None, help="YouTube upload privacy")
     parser.add_argument("--output", default=None, help="Custom output video path")
 
     args = parser.parse_args()
 
     topic_str = " ".join(args.topic).strip() if args.topic else None
+    upload_yt = args.upload or args.upload_all
+    upload_ig = args.upload_instagram or args.upload_all
 
     try:
         run_pipeline(
@@ -366,7 +391,8 @@ def main():
             no_music=args.no_music,
             music_volume=args.music_volume,
             dry_run=args.dry_run,
-            upload=args.upload,
+            upload=upload_yt,
+            upload_instagram=upload_ig,
             privacy=args.privacy,
             output_custom=args.output,
         )

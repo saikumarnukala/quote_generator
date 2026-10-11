@@ -16,6 +16,7 @@ class TestConfig(unittest.TestCase):
     def test_upload_disabled_by_default(self):
         # Unless explicitly set to true in env, should default to False
         self.assertIsInstance(config.YOUTUBE_UPLOAD_ENABLED, bool)
+        self.assertIsInstance(config.INSTAGRAM_UPLOAD_ENABLED, bool)
 
     def test_default_voices(self):
         self.assertIn("aura-", config.DEEPGRAM_VOICE)
