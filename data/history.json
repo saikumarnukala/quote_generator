@@ -867,6 +867,32 @@
       "video_duration": 27.73,
       "youtube_video_id": "d-9oavm2w2s",
       "upload_status": "uploaded"
+    },
+    {
+      "run_id": "run_1791741521",
+      "timestamp": "2026-10-11T17:58:41Z",
+      "topic": "The Hidden Subglacial Lakes Trapped Beneath Antarctica",
+      "normalized_topic": "the hidden subglacial lakes trapped beneath antarctica",
+      "category": "geography",
+      "title": "The Shocking Truth About The Hidden Subglacial Lakes Trapped Beneath Antarctica",
+      "script_summary": "Have you ever wondered what makes The Hidden Subglacial Lakes Trapped Beneath Antarctica so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: The Hidden Subglacial Lakes Trapped Beneath Antarctica",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=The%20Hidden%20Subglacial%20Lakes%20Trapped%20Beneath%20Antarctica"
+        }
+      ],
+      "visual_asset_ids": [
+        "7041146",
+        "26732070",
+        "36453231",
+        "31004692"
+      ],
+      "music_track": "none",
+      "output_video": "The_Hidden_Subglacial_Lakes_Trapped_Beneath_Antarc_20261011_175801.mp4",
+      "video_duration": 35.27,
+      "youtube_video_id": "RMJS5dnvY1w",
+      "upload_status": "uploaded"
     }
   ],
   "topics": [
@@ -874,36 +900,42 @@
     "How the James Webb Space Telescope Sees the Early Universe",
     "The Science Behind Bioluminescent Creatures in Deep Oceans",
     "How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago",
-    "Why Can't Light Escape a Black Hole?"
+    "Why Can't Light Escape a Black Hole?",
+    "The Hidden Subglacial Lakes Trapped Beneath Antarctica"
   ],
   "normalized_topics": [
+    "how the james webb space telescope sees the early universe",
+    "the science behind bioluminescent creatures in deep oceans",
     "how the antikythera mechanism predicted eclipses 2000 years ago",
     "why does ice float on water",
-    "why can t light escape a black hole",
-    "the science behind bioluminescent creatures in deep oceans",
-    "how the james webb space telescope sees the early universe"
+    "the hidden subglacial lakes trapped beneath antarctica",
+    "why can t light escape a black hole"
   ],
   "asset_ids": [
     "7687805",
-    "35611371",
     "30450505",
+    "36453231",
     "31314196",
-    "34729856",
-    "36298433",
+    "14618955",
     "7688618",
+    "7041146",
     "8721929",
+    "35611371",
+    "31004692",
+    "34729856",
     "28156100",
     "39859850",
-    "39872367",
-    "25935025",
-    "39149890",
+    "36298433",
     "10239476",
-    "14618955"
+    "39872367",
+    "26732070",
+    "39149890",
+    "25935025"
   ],
   "music_tracks": [
     "Stellar Drift",
+    "Cinematic Pulse",
     "Ancient Echoes",
-    "none",
-    "Cinematic Pulse"
+    "none"
   ]
 }
