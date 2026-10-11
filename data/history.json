@@ -842,38 +842,68 @@
       "video_duration": 18.0,
       "youtube_video_id": "mock_1791691063",
       "upload_status": "uploaded"
+    },
+    {
+      "run_id": "run_1791692033",
+      "timestamp": "2026-10-11T04:13:53Z",
+      "topic": "Why Can't Light Escape a Black Hole?",
+      "normalized_topic": "why can t light escape a black hole",
+      "category": "science",
+      "title": "The Shocking Truth About Why Can't Light Escape a Black Hole?",
+      "script_summary": "Have you ever wondered what makes Why Can't Light Escape a Black Hole? so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: Why Can't Light Escape a Black Hole?",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=Why%20Can%27t%20Light%20Escape%20a%20Black%20Hole%3F"
+        }
+      ],
+      "visual_asset_ids": [
+        "39872367",
+        "39859850",
+        "7688618"
+      ],
+      "music_track": "none",
+      "output_video": "Why_Cant_Light_Escape_a_Black_Hole_20261011_041241.mp4",
+      "video_duration": 27.73,
+      "youtube_video_id": "d-9oavm2w2s",
+      "upload_status": "uploaded"
     }
   ],
   "topics": [
     "Why Does Ice Float on Water?",
     "How the James Webb Space Telescope Sees the Early Universe",
     "The Science Behind Bioluminescent Creatures in Deep Oceans",
-    "How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago"
+    "How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago",
+    "Why Can't Light Escape a Black Hole?"
   ],
   "normalized_topics": [
-    "the science behind bioluminescent creatures in deep oceans",
-    "how the james webb space telescope sees the early universe",
+    "how the antikythera mechanism predicted eclipses 2000 years ago",
     "why does ice float on water",
-    "how the antikythera mechanism predicted eclipses 2000 years ago"
+    "why can t light escape a black hole",
+    "the science behind bioluminescent creatures in deep oceans",
+    "how the james webb space telescope sees the early universe"
   ],
   "asset_ids": [
-    "10239476",
-    "39149890",
-    "35611371",
-    "31314196",
-    "8721929",
-    "14618955",
     "7687805",
+    "35611371",
     "30450505",
-    "28156100",
+    "31314196",
+    "34729856",
     "36298433",
+    "7688618",
+    "8721929",
+    "28156100",
+    "39859850",
+    "39872367",
     "25935025",
-    "34729856"
+    "39149890",
+    "10239476",
+    "14618955"
   ],
   "music_tracks": [
-    "Cinematic Pulse",
     "Stellar Drift",
+    "Ancient Echoes",
     "none",
-    "Ancient Echoes"
+    "Cinematic Pulse"
   ]
 }
