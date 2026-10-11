@@ -3,28 +3,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-GROQ_API_KEY       = os.getenv("GROQ_API_KEY")
-HF_TOKEN           = os.getenv("HF_TOKEN")
-PEXELS_API_KEY     = os.getenv("PEXELS_API_KEY")
-JAMENDO_CLIENT_ID  = os.getenv("JAMENDO_CLIENT_ID", "")
-PIXABAY_API_KEY    = os.getenv("PIXABAY_API_KEY", "")
-DEEPGRAM_API_KEY   = os.getenv("DEEPGRAM_API_KEY")
+# --- AI & API Credentials ---
+GROQ_API_KEY       = os.getenv("GROQ_API_KEY", "").strip()
+PEXELS_API_KEY     = os.getenv("PEXELS_API_KEY", "").strip()
+PIXABAY_API_KEY    = os.getenv("PIXABAY_API_KEY", "").strip()
+DEEPGRAM_API_KEY   = os.getenv("DEEPGRAM_API_KEY", "").strip()
 
-# YouTube upload (optional — leave blank to skip)
-YT_CLIENT_ID      = os.getenv("YT_CLIENT_ID")
-YT_CLIENT_SECRET  = os.getenv("YT_CLIENT_SECRET")
-YT_REFRESH_TOKEN  = os.getenv("YT_REFRESH_TOKEN")
+# --- Voice Settings ---
+DEEPGRAM_VOICE     = os.getenv("DEEPGRAM_VOICE", "aura-asteria-en").strip()
+EDGE_TTS_VOICE     = os.getenv("EDGE_TTS_VOICE", "en-US-ChristopherNeural").strip()
+FALLBACK_TO_EDGE_TTS = os.getenv("FALLBACK_TO_EDGE_TTS", "false").lower() in ("true", "1", "yes")
 
-# Instagram upload (optional — leave blank to skip)
-INSTAGRAM_USER_ID       = os.getenv("INSTAGRAM_USER_ID")
-INSTAGRAM_ACCESS_TOKEN  = os.getenv("INSTAGRAM_ACCESS_TOKEN")
-INSTAGRAM_APP_ID        = os.getenv("INSTAGRAM_APP_ID")
-INSTAGRAM_APP_SECRET    = os.getenv("INSTAGRAM_APP_SECRET")
+# --- YouTube Upload Settings (Upload disabled by default) ---
+YT_CLIENT_ID           = os.getenv("YT_CLIENT_ID", "").strip()
+YT_CLIENT_SECRET       = os.getenv("YT_CLIENT_SECRET", "").strip()
+YT_REFRESH_TOKEN       = os.getenv("YT_REFRESH_TOKEN", "").strip()
+YOUTUBE_UPLOAD_ENABLED = os.getenv("YOUTUBE_UPLOAD_ENABLED", "false").lower() in ("true", "1", "yes")
+YOUTUBE_PRIVACY_STATUS = os.getenv("YOUTUBE_PRIVACY_STATUS", "private").strip()
 
-# 9:16 vertical — YouTube Shorts & Instagram Reels (max supported: 1080×1920 @ 30fps)
-VIDEO_WIDTH  = 1080
-VIDEO_HEIGHT = 1920
-VIDEO_FPS    = 30
+# --- Video Specs: 9:16 vertical (1080x1920 @ 30fps) ---
+VIDEO_WIDTH  = int(os.getenv("VIDEO_WIDTH", "1080"))
+VIDEO_HEIGHT = int(os.getenv("VIDEO_HEIGHT", "1920"))
+VIDEO_FPS    = int(os.getenv("VIDEO_FPS", "30"))
 
-OUTPUT_DIR = "output"
-TEMP_DIR   = "temp"
+# --- Directory Paths ---
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+TEMP_DIR   = os.path.join(BASE_DIR, "temp")
+ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+MUSIC_DIR  = os.path.join(ASSETS_DIR, "music")
+DATA_DIR   = os.path.join(BASE_DIR, "data")
+CACHE_DIR  = os.path.join(TEMP_DIR, "cache")

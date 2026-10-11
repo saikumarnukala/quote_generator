@@ -2,6 +2,7 @@
 .env
 *.env
 *.env.*
+client_secret*.json
 
 # Python
 __pycache__/
@@ -18,9 +19,12 @@ build/
 # Output and temp (generated files — keep repo clean)
 output/
 temp/
+*.mp4
+*.wav
 
-# Backups
+# Backups & logs
 *.bak
+*.log
 
 # IDE / OS
 .vscode/
@@ -28,7 +32,3 @@ temp/
 *.swp
 .DS_Store
 Thumbs.db
-
-client_secret*.json
-*.json
-!data/history.json

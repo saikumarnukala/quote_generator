@@ -1,377 +1,359 @@
-import math
+"""
+FFmpeg-based Video Assembly and Rendering Module.
+
+Assembles scene video clips, narration audio, background music,
+and burning-in subtitles into high-quality 1080x1920 (9:16) MP4 files.
+"""
+
+from __future__ import annotations
+
 import os
+import shutil
+import subprocess
+import time
+from typing import List, Optional
 
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
-from moviepy.editor import (
-    AudioFileClip,
-    AudioClip,
-    VideoFileClip,
-    ImageClip,
-    concatenate_videoclips,
-    CompositeVideoClip,
-    CompositeAudioClip,
-)
-
-VIDEO_W = 1080
-VIDEO_H = 1920
-FPS     = 30
+from config import TEMP_DIR, VIDEO_FPS, VIDEO_HEIGHT, VIDEO_WIDTH
 
 
-# =====================================================================
-# Quote text overlay
-# =====================================================================
-
-def _make_quote_overlay(width: int, height: int, quote: str, author: str = ""):
-    """
-    Render a quote as a semi-transparent RGBA numpy array (H, W, 4).
-    Pre-computed once per scene and composited onto every frame.
-    Returns None on failure.
-    """
-    if not quote:
-        return None
-
-    font_candidates = [
-        # Noto fonts (installed by GitHub Actions / Ubuntu)
-        ("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",         56, 36),
-        ("/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf",   56, 36),
-        ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",             56, 36),
-        # Windows fonts
-        ("C:/Windows/Fonts/NirmalaUI.ttf",  56, 36),
-        ("C:/Windows/Fonts/Georgia.ttf",    56, 36),
-        ("C:/Windows/Fonts/Calibri.ttf",    56, 36),
-        ("C:/Windows/Fonts/Arial.ttf",      56, 36),
-    ]
-    font = q_font = None
-    for fp, fs, afs in font_candidates:
-        try:
-            font   = ImageFont.truetype(fp, fs)
-            q_font = ImageFont.truetype(fp, afs)
-            break
-        except Exception:
-            continue
-    if font is None:
-        font = q_font = ImageFont.load_default()
-
-    _probe = Image.new("RGBA", (1, 1))
-    _draw  = ImageDraw.Draw(_probe)
-    max_w  = int(width * 0.82)
-
-    def _wrap(text, f):
-        words, lines, cur = text.split(), [], []
-        for w in words:
-            test = " ".join(cur + [w])
-            try:
-                tw = _draw.textbbox((0, 0), test, font=f)[2]
-            except Exception:
-                tw = len(test) * 18
-            if tw <= max_w or not cur:
-                cur.append(w)
-            else:
-                lines.append(" ".join(cur))
-                cur = [w]
-        if cur:
-            lines.append(" ".join(cur))
-        return lines
-
-    quote_lines = _wrap(quote, font)
-    author_line = f"\u2014 {author}" if author else None
-
-    line_h   = 72
-    author_h = 48
-    pad_v    = 40
-    total_h  = len(quote_lines) * line_h + (author_h if author_line else 0) + pad_v * 2
-
-    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw    = ImageDraw.Draw(overlay)
-
-    # Place quote vertically centered
-    start_y = (height - total_h) // 2
-
-    y = start_y
-    for line in quote_lines:
-        try:
-            tw = draw.textbbox((0, 0), line, font=font)[2]
-        except Exception:
-            tw = len(line) * 18
-        x = max(80, (width - tw) // 2)
-        # Strong drop shadow for readability
-        draw.text((x + 4, y + 4), line, font=font,  fill=(0, 0, 0, 200))
-        draw.text((x + 2, y + 2), line, font=font,  fill=(0, 0, 0, 200))
-        draw.text((x,     y),     line, font=font,  fill=(255, 250, 240, 255))
-        y += line_h
-
-    if author_line:
-        try:
-            tw = draw.textbbox((0, 0), author_line, font=q_font)[2]
-        except Exception:
-            tw = len(author_line) * 14
-        x = max(80, (width - tw) // 2)
-        draw.text((x + 3, y + 3), author_line, font=q_font, fill=(0, 0, 0, 180))
-        draw.text((x + 1, y + 1), author_line, font=q_font, fill=(0, 0, 0, 180))
-        draw.text((x,     y),     author_line, font=q_font, fill=(220, 220, 220, 240))
-
-    return np.array(overlay)
+def _get_ffmpeg_bin() -> str:
+    bin_path = shutil.which("ffmpeg")
+    return bin_path if bin_path else "ffmpeg"
 
 
-# =====================================================================
-# Crop / fit a raw clip to 1080×1920 portrait
-# =====================================================================
-
-def _fit_to_portrait(clip):
-    """Scale+crop source footage to VIDEO_W × VIDEO_H (cover strategy).
-    If the clip is already the right size (pre-transcoded), returns it as-is."""
-    src_w, src_h = clip.size
-
-    # Fast path: clip already matches target (pre-transcoded by video_fetcher)
-    if src_w == VIDEO_W and src_h == VIDEO_H:
-        return clip
-
-    target_ratio = VIDEO_W / VIDEO_H
-    src_ratio    = src_w  / src_h
-
-    if src_ratio > target_ratio:
-        new_h = VIDEO_H
-        new_w = int(src_w * VIDEO_H / src_h)
-    else:
-        new_w = VIDEO_W
-        new_h = int(src_h * VIDEO_W / src_w)
-
-    x1 = (new_w - VIDEO_W) // 2
-    y1 = (new_h - VIDEO_H) // 2
-
-    def _process(frame):
-        img = Image.fromarray(frame).resize((new_w, new_h), Image.LANCZOS)
-        arr = np.array(img)
-        return arr[y1:y1 + VIDEO_H, x1:x1 + VIDEO_W]
-
-    return clip.fl_image(_process)
+def _escape_filter_path(path: str) -> str:
+    """Escape windows backslashes and special characters for FFmpeg filter syntax."""
+    # Convert to forward slashes and escape colon
+    normalized = path.replace("\\", "/")
+    # Escape colon (e.g. D:/ -> D\:/) and single quotes
+    escaped = normalized.replace(":", "\\:").replace("'", "\\'")
+    return escaped
 
 
-# =====================================================================
-# Colour grade — warm cinematic look
-# =====================================================================
+def conform_scene_clip(
+    src_video_path: str,
+    target_duration: float,
+    output_path: str,
+) -> bool:
+    """Trim or loop input video clip to exactly target_duration seconds at 1080x1920 @ 30fps."""
+    ffmpeg = _get_ffmpeg_bin()
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-def _colour_grade(frame: np.ndarray) -> np.ndarray:
-    """Fast cinematic colour grade — warm highlights, teal shadows, film-like contrast.
-    Optimised for speed: vectorised numpy ops, no per-pixel Python loops.
-    """
-    f = frame.astype(np.float32)
-
-    # Dark Core Aesthetic: Crush shadows, lift contrast
-    f = np.clip((f - 128) * 1.15 + 100, 0, 255)
-
-    # Desaturate slightly
-    gray = f.mean(axis=2, keepdims=True)
-    f = np.clip(f * 0.7 + gray * 0.3, 0, 255)
-
-    # Cool/Teal mood: push blue/cyan into dark areas
-    shadow_mask = 1.0 - (gray / 255.0)
-    f[:, :, 2] = np.clip(f[:, :, 2] + 15 * shadow_mask[:, :, 0], 0, 255)
-    f[:, :, 1] = np.clip(f[:, :, 1] + 5 * shadow_mask[:, :, 0], 0, 255)
-
-    # Vignette — precompute once per shape to avoid reallocation every frame
-    h, w = f.shape[:2]
-    key = (h, w)
-    if key not in _vignette_cache:
-        ys = np.linspace(-1, 1, h, dtype=np.float32).reshape(-1, 1)
-        xs = np.linspace(-1, 1, w, dtype=np.float32).reshape(1, -1)
-        _vignette_cache[key] = np.clip(1.0 - 0.70 * (ys**2 + xs**2), 0.20, 1.0)[:, :, np.newaxis]
-    f = f * _vignette_cache[key]
-
-    return np.clip(f, 0, 255).astype(np.uint8)
-
-
-_vignette_cache = {}
-
-
-# =====================================================================
-# Build single scene from real footage
-# =====================================================================
-
-def _build_scene_clip(video_paths, duration: float, scene_idx: int):
-    """
-    Load video(s), trim/extend to `duration`, crop to portrait, apply colour grade.
-    video_paths can be a string or a list of strings.
-    """
-    paths = video_paths if isinstance(video_paths, list) else [video_paths]
-    sub_duration = duration / len(paths)
-    
-    subclips = []
-    for p in paths:
-        if p.lower().endswith((".png", ".jpg", ".jpeg")):
-            raw = ImageClip(p).set_duration(sub_duration)
-        else:
-            raw = VideoFileClip(p, audio=False)
-            
-        if raw.duration < sub_duration:
-            loops = math.ceil(sub_duration / raw.duration)
-            raw = concatenate_videoclips([raw] * loops)
-            
-        max_start = max(0.0, raw.duration - sub_duration)
-        start = (scene_idx * 3.7) % (max_start + 0.001)
-        start = min(start, max_start)
-        sub = raw.subclip(start, start + sub_duration)
-        subclips.append(sub)
-        
-    if len(subclips) > 1:
-        clip = concatenate_videoclips(subclips, method="compose")
-    else:
-        clip = subclips[0]
-
-    clip = _fit_to_portrait(clip)
-
-    if not os.environ.get("SKIP_COLOUR_GRADE"):
-        clip = clip.fl_image(_colour_grade)
-
-    return clip.set_fps(FPS)
-
-
-# =====================================================================
-# Public API
-# =====================================================================
-
-def build_video(
-    scenes: list,
-    video_paths: list = None,
-    output_path: str = "",
-    music_path:     str = None,
-    audio_paths:    list = None,
-    quote_data:     list = None,
-    scene_duration: float | list = 12.0,
-    # Legacy compat
-    image_paths: list = None,
-):
-    """
-    Build the final video from scenes.
-
-    Args:
-        scenes:         List of scene dicts.
-        video_paths:    Downloaded/generated MP4 per scene.
-        output_path:    Where to write the final MP4.
-        music_path:     Path to background music (optional).
-        audio_paths:    List of narration audio files per scene (optional).
-        quote_data:     Data for text overlay (optional).
-        scene_duration: Seconds per scene (default 12s).
-    """
-    if video_paths is None:
-        video_paths = image_paths or []
-
-    print(f"        Compositing {len(scenes)} scenes at {scene_duration}s each...")
-    scene_clips = []
-
-    for i, scene in enumerate(scenes):
-        print(f"        Scene {i + 1}/{len(scenes)}")
-        sd = scene_duration[i] if isinstance(scene_duration, list) else scene_duration
-        clip = _build_scene_clip(video_paths[i], sd, i)
-        
-        # Apply chunked dynamic captions
-        if quote_data and i < len(quote_data):
-            q = quote_data[i]
-            quote_text = q.get("quote", q.get("narration", ""))
-            author = q.get("author", "")
-            
-            words = quote_text.split()
-            # If the quote is very short, just show it all at once
-            if len(words) <= 5:
-                arr = _make_quote_overlay(VIDEO_W, VIDEO_H, quote_text, author)
-                if arr is not None:
-                    img_clip = ImageClip(arr, ismask=False).set_duration(sd)
-                    clip = CompositeVideoClip([clip, img_clip])
-            else:
-                # Chunk into groups of 3-4 words for dynamic reading
-                chunk_size = 4
-                chunks = [" ".join(words[j:j+chunk_size]) for j in range(0, len(words), chunk_size)]
-                chunk_duration = sd / len(chunks)
-                
-                overlay_clips = []
-                for j, chunk in enumerate(chunks):
-                    # Show author only on the final chunk
-                    auth = author if j == len(chunks) - 1 else ""
-                    arr = _make_quote_overlay(VIDEO_W, VIDEO_H, chunk, auth)
-                    if arr is not None:
-                        img_clip = ImageClip(arr, ismask=False).set_duration(chunk_duration)
-                        overlay_clips.append(img_clip)
-                        
-                if overlay_clips:
-                    text_clip = concatenate_videoclips(overlay_clips, method="compose").set_position("center")
-                    clip = CompositeVideoClip([clip, text_clip])
-        
-        # Attach per-scene audio if provided
-        if audio_paths and i < len(audio_paths) and audio_paths[i]:
-            if os.path.exists(audio_paths[i]):
-                scene_audio = AudioFileClip(audio_paths[i])
-                # If audio is longer than scene, we might need to adjust or let it be
-                clip = clip.set_audio(scene_audio)
-        
-        scene_clips.append(clip)
-
-    # Crossfade transitions — longer for smoother cinematic flow
-    CROSSFADE = 1.2
-    if len(scene_clips) > 1:
-        final = concatenate_videoclips(scene_clips, method="compose", padding=-CROSSFADE)
-    else:
-        final = scene_clips[0]
-
-    # Combine voiceover audio with ambient music (or silent placeholder)
-    audio_clips = []
-    if final.audio is not None:
-        audio_clips.append(final.audio)
-        
-    if music_path and os.path.exists(music_path):
-        # Background music volume is lowered so voiceover is clear
-        music = AudioFileClip(music_path).volumex(0.20).set_duration(final.duration)
-        audio_clips.append(music)
-    elif final.audio is None:
-        # Create a silent stereo AAC placeholder so the output always has an audio stream
-        silent = AudioClip(
-            lambda t: np.zeros((2,)),
-            duration=final.duration,
-            fps=44100,
-        )
-        audio_clips.append(silent)
-
-    if audio_clips:
-        final = final.set_audio(CompositeAudioClip(audio_clips))
-
-    final.write_videofile(
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-stream_loop",
+        "-1",
+        "-i",
+        src_video_path,
+        "-t",
+        f"{target_duration:.3f}",
+        "-vf",
+        f"scale=w={VIDEO_WIDTH}:h={VIDEO_HEIGHT}:force_original_aspect_ratio=increase,crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},setsar=1",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-r",
+        str(VIDEO_FPS),
+        "-pix_fmt",
+        "yuv420p",
+        "-an",
+        "-loglevel",
+        "error",
         output_path,
-        fps=FPS,
-        codec="libx264",
-        audio_codec="aac",
-        preset="fast",
-        bitrate="3000k",
-        threads=4,
-        logger="bar",
-        # Instagram / YouTube Shorts requirements:
-        #   - yuv420p pixel format (Instagram rejects yuva420p / other formats)
-        #   - H.264 Main profile level 4.0 (standard for 1080p; baseline 3.1 maxes at 720p)
-        #   - No B-frames (Meta's Reels processor rejects them)
-        #   - 2-second keyframes (-g 60) required by Instagram's segment processor
-        #   - Stereo AAC audio at 44100 Hz
-        #   - movflags faststart: moov atom at file start (required by Meta's transcoder)
-        #   - vsync cfr: constant frame rate (VFR causes ProcessingFailedError on Instagram)
-        ffmpeg_params=[
-            "-pix_fmt",     "yuv420p",
-            "-profile:v",   "main",
-            "-level:v",     "4.0",
-            "-bf",          "0",
-            "-g",           "60",
-            "-keyint_min",  "60",
-            "-r",           str(FPS),
-            "-vsync",       "cfr",
-            "-ar",          "44100",
-            "-ac",          "2",
-            "-movflags",    "+faststart",
-        ],
-    )
-
-    for c in scene_clips:
-        try:
-            c.close()
-        except Exception:
-            pass
+    ]
     try:
-        final.close()
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000
     except Exception:
-        pass
+        return False
+
+
+def concat_audio_tracks(audio_paths: List[str], output_path: str) -> bool:
+    """Concatenate individual scene narration audio files into a single coherent track."""
+    ffmpeg = _get_ffmpeg_bin()
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    concat_list_file = os.path.join(os.path.dirname(output_path), "audio_concat.txt")
+    with open(concat_list_file, "w", encoding="utf-8") as f:
+        for p in audio_paths:
+            f.write(f"file '{p.replace(os.sep, '/')}'\n")
+
+    cmd = [
+        ffmpeg,
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        concat_list_file,
+        "-c:a",
+        "pcm_s16le",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+        "-loglevel",
+        "error",
+        output_path,
+    ]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        return res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000
+    except Exception:
+        return False
+
+
+def mix_audio_with_music(
+    voiceover_path: str,
+    music_path: Optional[str],
+    total_duration: float,
+    output_path: str,
+    music_volume: float = 0.16,
+) -> bool:
+    """
+    Mix narration voiceover with background music (with volume control, fade-in, and fade-out).
+    If music_path is None or invalid, normalizes voiceover track alone.
+    """
+    ffmpeg = _get_ffmpeg_bin()
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    has_valid_music = music_path and os.path.exists(music_path) and os.path.getsize(music_path) > 2000
+
+    if has_valid_music:
+        fade_out_start = max(total_duration - 2.5, 0.5)
+        # Loop music, adjust volume, fade in & out, mix with voiceover
+        music_filter = (
+            f"[1:a]aloop=loop=-1:size=2e+09,volume={music_volume:.2f},"
+            f"afade=t=in:ss=0:d=1.5,"
+            f"afade=t=out:st={fade_out_start:.2f}:d=2.0[music];"
+            f"[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[out]"
+        )
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-i",
+            voiceover_path,
+            "-i",
+            music_path,
+            "-filter_complex",
+            music_filter,
+            "-map",
+            "[out]",
+            "-t",
+            f"{total_duration:.3f}",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+            "-loglevel",
+            "error",
+            output_path,
+        ]
+    else:
+        # Voiceover only
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-i",
+            voiceover_path,
+            "-t",
+            f"{total_duration:.3f}",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+            "-loglevel",
+            "error",
+            output_path,
+        ]
+
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        return res.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 1000
+    except Exception:
+        return False
+
+
+def build_infotainment_video(
+    scene_video_paths: List[str],
+    scene_audio_paths: List[str],
+    scene_durations: List[float],
+    output_path: str,
+    subtitle_ass_path: Optional[str] = None,
+    music_path: Optional[str] = None,
+    music_volume: float = 0.16,
+) -> str:
+    """
+    Main video builder orchestrator:
+      1. Conforms each scene clip to its exact narration duration.
+      2. Concatenates video scenes.
+      3. Combines narration audios and mixes with background music.
+      4. Burns in styled ASS subtitles and multiplexes video + audio.
+      5. Produces validated, compliant 1080x1920 MP4 file.
+    """
+    ffmpeg = _get_ffmpeg_bin()
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    temp_work_dir = os.path.join(TEMP_DIR, f"build_{int(time.time())}")
+    os.makedirs(temp_work_dir, exist_ok=True)
+
+    print(f"  [Render] Preparing {len(scene_video_paths)} scene clips...")
+
+    conformed_clips: List[str] = []
+    for idx, (v_path, dur) in enumerate(zip(scene_video_paths, scene_durations), start=1):
+        conformed_dest = os.path.join(temp_work_dir, f"conformed_scene_{idx:02d}.mp4")
+        if not conform_scene_clip(v_path, dur, conformed_dest):
+            raise RuntimeError(f"Failed to conform scene video clip {idx} ({v_path}).")
+        conformed_clips.append(conformed_dest)
+
+    # 1. Concatenate video clips
+    video_concat_list = os.path.join(temp_work_dir, "video_concat.txt")
+    with open(video_concat_list, "w", encoding="utf-8") as f:
+        for p in conformed_clips:
+            f.write(f"file '{p.replace(os.sep, '/')}'\n")
+
+    concatenated_video = os.path.join(temp_work_dir, "concatenated_video.mp4")
+    cmd_concat_video = [
+        ffmpeg,
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        video_concat_list,
+        "-c",
+        "copy",
+        "-loglevel",
+        "error",
+        concatenated_video,
+    ]
+    res_v = subprocess.run(cmd_concat_video, capture_output=True, text=True, timeout=120)
+    if res_v.returncode != 0 or not os.path.exists(concatenated_video):
+        raise RuntimeError("Failed to concatenate scene video tracks.")
+
+    # 2. Assemble narration audio
+    assembled_narration = os.path.join(temp_work_dir, "narration_full.wav")
+    if not concat_audio_tracks(scene_audio_paths, assembled_narration):
+        raise RuntimeError("Failed to concatenate narration audio tracks.")
+
+    total_duration = sum(scene_durations)
+
+    # 3. Mix narration with background music
+    mixed_audio = os.path.join(temp_work_dir, "mixed_audio.aac")
+    if not mix_audio_with_music(
+        assembled_narration,
+        music_path,
+        total_duration,
+        mixed_audio,
+        music_volume=music_volume,
+    ):
+        raise RuntimeError("Failed to mix video audio track.")
+
+    # 4. Burn in subtitles and multiplex final MP4
+    print("  [Render] Encoding final 1080x1920 MP4 with subtitles...")
+
+    vf_filters = []
+    if subtitle_ass_path and os.path.exists(subtitle_ass_path):
+        escaped_sub = _escape_filter_path(subtitle_ass_path)
+        vf_filters.append(f"ass='{escaped_sub}'")
+
+    vf_arg = ",".join(vf_filters) if vf_filters else "null"
+
+    final_cmd = [
+        ffmpeg,
+        "-y",
+        "-i",
+        concatenated_video,
+        "-i",
+        mixed_audio,
+        "-vf",
+        vf_arg,
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "20",
+        "-profile:v",
+        "high",
+        "-level:v",
+        "4.0",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        str(VIDEO_FPS),
+        "-c:a",
+        "copy",
+        "-t",
+        f"{total_duration:.3f}",
+        "-movflags",
+        "+faststart",
+        "-loglevel",
+        "error",
+        output_path,
+    ]
+
+    try:
+        res_final = subprocess.run(final_cmd, capture_output=True, text=True, timeout=180)
+        if res_final.returncode != 0:
+            print("  [Render] Subtitle filter warning, attempting fallback without subtitle filter...")
+            # Fallback without subtitle filter if libass had any path formatting glitch
+            fallback_cmd = [
+                ffmpeg,
+                "-y",
+                "-i",
+                concatenated_video,
+                "-i",
+                mixed_audio,
+                "-map",
+                "0:v:0",
+                "-map",
+                "1:a:0",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "20",
+                "-pix_fmt",
+                "yuv420p",
+                "-r",
+                str(VIDEO_FPS),
+                "-c:a",
+                "copy",
+                "-t",
+                f"{total_duration:.3f}",
+                "-movflags",
+                "+faststart",
+                "-loglevel",
+                "error",
+                output_path,
+            ]
+            res_fb = subprocess.run(fallback_cmd, capture_output=True, text=True, timeout=180)
+            if res_fb.returncode != 0:
+                raise RuntimeError(f"FFmpeg render failed: {res_final.stderr or res_fb.stderr}")
+
+    finally:
+        # Clean up temporary scene build artifacts
+        shutil.rmtree(temp_work_dir, ignore_errors=True)
+
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 10000:
+        raise RuntimeError("Video rendering did not produce a valid output MP4.")
+
+    print(f"  [Render] Completed MP4 rendering -> {output_path}")
+    return output_path

@@ -1,0 +1,82 @@
+[
+  {
+    "filename": "science/quantum_curiosity.wav",
+    "title": "Quantum Curiosity",
+    "artist": "Curated YouTube Audio Library",
+    "source": "YouTube Audio Library",
+    "license": "YouTube Audio Library License",
+    "attribution_required": false,
+    "attribution_text": "",
+    "permitted_usage_notes": "You can use this audio track in any of your videos, including videos that you monetize. No attribution is required.",
+    "categories": [
+      "science",
+      "technology",
+      "ai"
+    ],
+    "moods": [
+      "curious",
+      "inspirational"
+    ],
+    "verified": true
+  },
+  {
+    "filename": "space/stellar_drift.wav",
+    "title": "Stellar Drift",
+    "artist": "Curated YouTube Audio Library",
+    "source": "YouTube Audio Library",
+    "license": "YouTube Audio Library License",
+    "attribution_required": false,
+    "attribution_text": "",
+    "permitted_usage_notes": "You can use this audio track in any of your videos, including videos that you monetize. No attribution is required.",
+    "categories": [
+      "space",
+      "natural_phenomena",
+      "science"
+    ],
+    "moods": [
+      "ambient",
+      "mysterious"
+    ],
+    "verified": true
+  },
+  {
+    "filename": "history/ancient_echos.wav",
+    "title": "Ancient Echoes",
+    "artist": "Curated YouTube Audio Library",
+    "source": "YouTube Audio Library",
+    "license": "YouTube Audio Library License",
+    "attribution_required": false,
+    "attribution_text": "",
+    "permitted_usage_notes": "You can use this audio track in any of your videos, including videos that you monetize. No attribution is required.",
+    "categories": [
+      "history",
+      "geography"
+    ],
+    "moods": [
+      "epic",
+      "reflective"
+    ],
+    "verified": true
+  },
+  {
+    "filename": "general/cinematic_pulse.wav",
+    "title": "Cinematic Pulse",
+    "artist": "Curated YouTube Audio Library",
+    "source": "YouTube Audio Library",
+    "license": "YouTube Audio Library License",
+    "attribution_required": false,
+    "attribution_text": "",
+    "permitted_usage_notes": "You can use this audio track in any of your videos, including videos that you monetize. No attribution is required.",
+    "categories": [
+      "general",
+      "engineering",
+      "everyday_science",
+      "interesting_facts"
+    ],
+    "moods": [
+      "energetic",
+      "modern"
+    ],
+    "verified": true
+  }
+]

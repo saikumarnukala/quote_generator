@@ -741,5 +741,46 @@
     "soundhelix-6",
     "soundhelix-9",
     "soundhelix-2"
+  ],
+  "runs": [
+    {
+      "run_id": "run_1791689791",
+      "timestamp": "2026-10-11T03:36:31Z",
+      "topic": "Why Does Ice Float on Water?",
+      "normalized_topic": "why does ice float on water",
+      "category": "everyday_science",
+      "title": "The Shocking Truth About Why Does Ice Float on Water?",
+      "script_summary": "Have you ever wondered what makes Why Does Ice Float on Water? so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: Why Does Ice Float on Water?",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=Why%20Does%20Ice%20Float%20on%20Water%3F"
+        }
+      ],
+      "visual_asset_ids": [
+        "10239476",
+        "36298433",
+        "7687805"
+      ],
+      "music_track": "Cinematic Pulse",
+      "output_video": "Why_Does_Ice_Float_on_Water_20261011_090606.mp4",
+      "video_duration": 26.4,
+      "youtube_video_id": null,
+      "upload_status": "local_only"
+    }
+  ],
+  "topics": [
+    "Why Does Ice Float on Water?"
+  ],
+  "normalized_topics": [
+    "why does ice float on water"
+  ],
+  "asset_ids": [
+    "36298433",
+    "10239476",
+    "7687805"
+  ],
+  "music_tracks": [
+    "Cinematic Pulse"
   ]
 }
