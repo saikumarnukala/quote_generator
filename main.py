@@ -1,535 +1,381 @@
 """
-Peaceful Quotes Video Generator
-================================
-Generates calming AI landscape scenes paired with inspirational quotes
-and peaceful ambient music. Ready for YouTube and Instagram.
+Infotainment Video Automation System — Main Orchestrator.
 
-Usage:
-    python main.py                                  <- auto rotating topic
-    python main.py "gratitude and inner peace"      <- custom topic
-    python main.py --scenes 8 --lang te             <- Telugu, 8 scenes
-    python main.py --music ./jamendo_track.mp3 --jamendo-music --allow-jamendo-upload
+Transforms researched educational topics into engaging, verified,
+9:16 vertical infotainment videos for YouTube Shorts.
+
+Pipeline Flow:
+  Topic Selection
+    ↓
+  Factual Research & Source Collection
+    ↓
+  Groq Script Generation & Schema Validation
+    ↓
+  Deepgram Aura Voiceover Generation & Timing
+    ↓
+  Synchronized Subtitle Generation
+    ↓
+  Multi-Tier Media Retrieval (Pexels / Pixabay / Graphics)
+    ↓
+  Curated Music Selection (YouTube Audio Library)
+    ↓
+  FFmpeg Video Assembly & Burn-In Subtitles
+    ↓
+  FFprobe Quality Validation
+    ↓
+  Thumbnail & Metadata Generation
+    ↓
+  Persistent History Recording
+    ↓
+  Optional YouTube Upload (Disabled by default)
 """
+
+from __future__ import annotations
+
+import argparse
 import json
 import os
-import random
-import shutil
 import sys
 import time
-import traceback
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-from config import GROQ_API_KEY, PEXELS_API_KEY, JAMENDO_CLIENT_ID, PIXABAY_API_KEY, OUTPUT_DIR, TEMP_DIR
-from src.quote_generator import generate_quotes, generate_video_metadata
+from config import (
+    DEEPGRAM_API_KEY,
+    DEEPGRAM_VOICE,
+    GROQ_API_KEY,
+    OUTPUT_DIR,
+    PEXELS_API_KEY,
+    PIXABAY_API_KEY,
+    TEMP_DIR,
+    YOUTUBE_PRIVACY_STATUS,
+    YOUTUBE_UPLOAD_ENABLED,
+)
 from src.audio_generator import generate_audio, get_audio_duration
-from src.video_fetcher import fetch_nature_video
-from src.ambient_generator import generate_ambient
-from src.music_fetcher import fetch_trending_music
-from src.video_builder import build_video
+from src.copyright_checker import check_music_track_licensing, check_visual_assets_integrity
+from src.history import (
+    get_used_asset_ids,
+    get_used_music_tracks,
+    get_used_topics,
+    is_topic_already_used,
+    record_infotainment_run,
+)
+from src.media_fetcher import RetrievedAsset, retrieve_scene_media
+from src.metadata_generator import generate_infotainment_metadata
+from src.music_manager import MusicTrack, select_background_track
+from src.researcher import ResearchDossier, research_topic
+from src.script_generator import InfotainmentScript, generate_infotainment_script
+from src.subtitle_generator import generate_ass, generate_srt
+from src.thumbnail_generator import generate_infotainment_thumbnail
+from src.topic_manager import get_categories, select_topic
+from src.video_builder import build_infotainment_video
+from src.video_validator import ValidationReport, validate_mp4_video
 from src.youtube_uploader import upload_to_youtube
-from src.instagram_uploader import upload_to_instagram
-from src.history import get_used_quotes, get_used_video_ids, get_used_music_ids, record_run
-from src.copyright_checker import check_music, check_videos
 
 
-# ---------------------------------------------------------------------------
-# Rotating topic pool  (used when no topic is given)
-# ---------------------------------------------------------------------------
-TOPICS = [
-    "inner peace and mindfulness",
-    "the beauty of nature and solitude",
-    "gratitude and joy in simple things",
-    "courage and personal growth",
-    "love, kindness and compassion",
-    "letting go and finding freedom",
-    "strength through silence",
-    "the wisdom of patience",
-    "harmony between mind and nature",
-    "living in the present moment",
-    "hope and new beginnings",
-    "the power of a calm mind",
-    "self-love and acceptance",
-    "finding light in darkness",
-    "the art of being still",
-    "the beauty of impermanence",
-    "healing through solitude and reflection",
-    "the courage to be vulnerable",
-    "finding wonder in the ordinary",
-    "the rhythm of the universe within us",
-    "surrendering to the flow of life",
-    "the quiet power of gentleness",
-    "ancient wisdom for modern souls",
-    "the sacred art of doing nothing",
-    "finding home within yourself",
-    "the poetry of rain and renewal",
-    "dancing with uncertainty",
-    "the forgotten language of the heart",
-    "moonlight, mystery and inner knowing",
-    "the alchemy of pain into wisdom",
-]
-
-LANGUAGE_NAMES = {
-    "en": "English",
-    "te": "Telugu",
-    "hi": "Hindi",
-    "ta": "Tamil",
-    "ja": "Japanese",
-}
+def _safe_filename(text: str) -> str:
+    """Generate a clean, cross-platform filesystem-safe filename."""
+    cleaned = "".join(c if (c.isalnum() or c in " _-") else "" for c in text)
+    return cleaned.strip().replace(" ", "_")[:50]
 
 
-def _auto_topic() -> str:
-    """Pick a unique random topic each run, avoiding the last used topic."""
-    last_topic_file = os.path.join(OUTPUT_DIR, ".last_topic")
-    last_topic = None
-    if os.path.exists(last_topic_file):
-        try:
-            with open(last_topic_file, "r", encoding="utf-8") as f:
-                last_topic = f.read().strip()
-        except Exception:
-            pass
-
-    available = [t for t in TOPICS if t != last_topic]
-    if not available:
-        available = TOPICS
-
-    topic = random.choice(available)
-
-    try:
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        with open(last_topic_file, "w", encoding="utf-8") as f:
-            f.write(topic)
-    except Exception:
-        pass
-
-    return topic
-
-
-def _setup_dirs() -> None:
+def run_pipeline(
+    topic: Optional[str] = None,
+    category: Optional[str] = None,
+    num_scenes: int = 4,
+    target_duration: float = 45.0,
+    voice: Optional[str] = None,
+    music_path: Optional[str] = None,
+    no_music: bool = False,
+    music_volume: float = 0.16,
+    dry_run: bool = False,
+    upload: bool = False,
+    privacy: Optional[str] = None,
+    output_custom: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Execute the full end-to-end infotainment video creation pipeline."""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(TEMP_DIR, exist_ok=True)
 
+    print("\n" + "=" * 65)
+    print("  INFOTAINMENT VIDEO AUTOMATION SYSTEM")
+    print("=" * 65)
 
-def _cleanup_temp() -> None:
-    """Remove temp files, ignoring files still locked by MoviePy on Windows."""
-    if os.path.exists(TEMP_DIR):
-        for fname in os.listdir(TEMP_DIR):
-            fpath = os.path.join(TEMP_DIR, fname)
-            try:
-                if os.path.isfile(fpath):
-                    os.unlink(fpath)
-                elif os.path.isdir(fpath):
-                    shutil.rmtree(fpath, ignore_errors=True)
-            except Exception:
-                pass  # File still locked by MoviePy — leave it, harmless
-    os.makedirs(TEMP_DIR, exist_ok=True)
+    # ── 1. Topic Selection ──────────────────────────────────────────────
+    past_topics = get_used_topics()
+    chosen_topic, chosen_category = select_topic(
+        category=category,
+        manual_topic=topic,
+        past_topics=past_topics,
+    )
 
+    if is_topic_already_used(chosen_topic):
+        print(f"  [Notice] Topic '{chosen_topic}' is similar to a recently covered topic.")
 
-def _safe_filename(title: str) -> str:
-    return "".join(c if c.isalnum() or c in " _-" else "" for c in title).replace(" ", "_")[:60]
+    print(f"  Category : {chosen_category.upper()}")
+    print(f"  Topic    : {chosen_topic}")
+    print(f"  Scenes   : {num_scenes}")
 
+    # ── 2. Research & Source Collection ─────────────────────────────────
+    print("\n[ 1/8 ] Researching topic and retrieving reliable sources...")
+    dossier: ResearchDossier = research_topic(chosen_topic, category=chosen_category)
+    print(f"        Primary Source : {dossier.primary_source_title}")
+    print(f"        Source URL     : {dossier.primary_source_url}")
+    print(f"        Extracted Facts: {len(dossier.key_facts)} verified claims")
 
-def _check_env() -> None:
-    """Warn about missing credentials but never stop the process."""
-    missing = []
-    if not GROQ_API_KEY:
-        missing.append("GROQ_API_KEY")
-    if not PEXELS_API_KEY:
-        missing.append("PEXELS_API_KEY")
-    if missing:
-        print("WARNING: Missing environment variables — some steps will use fallbacks:")
-        for k in missing:
-            print(f"  - {k}")
+    # ── 3. Script Generation & Schema Validation ────────────────────────
+    print("\n[ 2/8 ] Generating and validating structured infotainment script...")
+    script: InfotainmentScript = generate_infotainment_script(
+        topic=chosen_topic,
+        category=chosen_category,
+        dossier=dossier,
+        groq_api_key=GROQ_API_KEY,
+        num_scenes=num_scenes,
+        target_duration=target_duration,
+    )
+    print(f"        Title    : {script.title}")
+    print(f"        Hook     : {script.hook}")
+    print(f"        Scenes   : {len(script.scenes)} planned scenes")
 
+    # ── 4. Voiceover Generation (Deepgram Aura) ─────────────────────────
+    print("\n[ 3/8 ] Generating voiceover narration (Deepgram Aura)...")
+    chosen_voice = voice or DEEPGRAM_VOICE or "aura-asteria-en"
+    print(f"        Voice: {chosen_voice}")
 
-# ---------------------------------------------------------------------------
-# Pipeline
-# ---------------------------------------------------------------------------
+    audio_paths: List[str] = []
+    durations: List[float] = []
 
-SCENE_DURATION = 12.0   # seconds per scene — comfortable reading time
+    for sc in script.scenes:
+        audio_dest = os.path.join(TEMP_DIR, f"scene_{sc.scene_number:02d}_speech.mp3")
+        try:
+            generate_audio(
+                text=sc.narration,
+                output_path=audio_dest,
+                voice=chosen_voice,
+                api_key=DEEPGRAM_API_KEY,
+            )
+            dur = get_audio_duration(audio_dest)
+            # Add small 0.3s visual pacing buffer per scene
+            pacing_dur = max(dur + 0.3, 3.0)
+            audio_paths.append(audio_dest)
+            durations.append(pacing_dur)
+            print(f"        Scene {sc.scene_number:02d}: {dur:.2f}s speech ('{sc.narration[:35]}...')")
+        except Exception as e:
+            print(f"        Audio error for scene {sc.scene_number}: {e}")
+            raise
 
-# Hardcoded public-domain quotes used only when Groq API is unavailable
-_HARDCODED_QUOTES = [
-    {"quote": "The present moment is the only moment available to us.", "author": "Ancient Wisdom",
-     "location": "Mountain Summit", "video_search": "aerial misty mountain sunrise fog", "narration": "Breathe."},
-    {"quote": "In the middle of every difficulty lies opportunity.", "author": "Ancient Wisdom",
-     "location": "Desert Horizon", "video_search": "golden hour desert sand dunes sunset", "narration": "The light finds a way."},
-    {"quote": "The soul that sees beauty may sometimes walk alone.", "author": "Rumi",
-     "location": "Forest Path", "video_search": "slow motion sunlight through forest trees", "narration": "Walk in your own light."},
-    {"quote": "What you seek is seeking you.", "author": "Rumi",
-     "location": "Ocean Shore", "video_search": "golden hour ocean waves drone aerial", "narration": "The universe listens."},
-    {"quote": "Silence is the language of God.", "author": "Rumi",
-     "location": "Snowy Peak", "video_search": "4k timelapse snow mountain clouds", "narration": "Listen deeply."},
-    {"quote": "Flow with whatever may happen and let your mind be free.", "author": "Lao Tzu",
-     "location": "Waterfall Valley", "video_search": "slow motion waterfall jungle green", "narration": "Let go."},
-    {"quote": "Nature does not hurry, yet everything is accomplished.", "author": "Lao Tzu",
-     "location": "Cherry Blossoms", "video_search": "cherry blossom petals falling slow motion", "narration": "Trust the timing."},
-]
+    total_spoken_duration = sum(durations)
+    print(f"        Total Duration: {total_spoken_duration:.1f}s")
 
+    # ── 5. Subtitle Generation ──────────────────────────────────────────
+    print("\n[ 4/8 ] Generating synchronized ASS & SRT subtitles...")
+    sub_srt_path = os.path.join(TEMP_DIR, "subtitles.srt")
+    sub_ass_path = os.path.join(TEMP_DIR, "subtitles.ass")
 
-def _fallback_quotes(topic: str, num_scenes: int) -> dict:
-    """Return hardcoded public-domain quotes when Groq is unavailable."""
-    import random as _random
-    pool = _HARDCODED_QUOTES * ((num_scenes // len(_HARDCODED_QUOTES)) + 1)
-    selected = _random.sample(pool, min(num_scenes, len(pool)))
+    scene_narrations = [sc.narration for sc in script.scenes]
+    generate_srt(scene_narrations, durations, sub_srt_path)
+    generate_ass(scene_narrations, durations, sub_ass_path)
+    print(f"        Generated ASS subtitles with safe margins -> {sub_ass_path}")
+
+    # ── 6. Visual Media Retrieval ───────────────────────────────────────
+    print("\n[ 5/8 ] Retrieving visual media assets (Pexels / Pixabay / Graphics)...")
+    used_asset_ids = get_used_asset_ids()
+    retrieved_assets: List[RetrievedAsset] = []
+    scene_video_paths: List[str] = []
+
+    for sc, sc_dur in zip(script.scenes, durations):
+        print(f"      Scene {sc.scene_number}/{len(script.scenes)}: '{sc.main_subject}' ({sc_dur:.1f}s)")
+        scene_clip_dest = os.path.join(TEMP_DIR, f"scene_{sc.scene_number:02d}_conformed.mp4")
+
+        asset = retrieve_scene_media(
+            scene_number=sc.scene_number,
+            video_queries=sc.video_search_queries,
+            image_queries=sc.image_search_queries,
+            main_subject=sc.main_subject,
+            target_duration=sc_dur,
+            output_video_path=scene_clip_dest,
+            used_ids=used_asset_ids,
+            pexels_key=PEXELS_API_KEY,
+            pixabay_key=PIXABAY_API_KEY,
+        )
+        retrieved_assets.append(asset)
+        scene_video_paths.append(asset.path)
+        used_asset_ids.add(str(asset.asset_id))
+
+    assets_ok, bad_assets = check_visual_assets_integrity(retrieved_assets)
+    if not assets_ok:
+        print(f"  [Warning] Media check warnings: {bad_assets}")
+
+    # ── 7. Background Music Selection ───────────────────────────────────
+    print("\n[ 6/8 ] Selecting curated background music...")
+    selected_track: Optional[MusicTrack] = None
+
+    if no_music:
+        print("        --no-music requested: rendering with narration only.")
+    elif music_path and os.path.exists(music_path):
+        print(f"        Using user-specified background music: {music_path}")
+        selected_track = MusicTrack(
+            filename=os.path.basename(music_path),
+            title="User Background Track",
+            artist="Custom",
+            resolved_path=os.path.abspath(music_path),
+            verified=True,
+        )
+    else:
+        used_music = get_used_music_tracks()
+        selected_track = select_background_track(
+            category=chosen_category,
+            used_track_names=used_music,
+        )
+
+    lic_check = check_music_track_licensing(selected_track)
+    if not lic_check.is_compliant:
+        print(f"  [Warning] Music track license check failed: {lic_check.reasons}. Omitting music.")
+        selected_track = None
+
+    final_music_path = selected_track.resolved_path if selected_track else None
+
+    # ── 8. Video Assembly (FFmpeg) ──────────────────────────────────────
+    print("\n[ 7/8 ] Rendering final 1080x1920 MP4 video...")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_topic = _safe_filename(chosen_topic)
+
+    final_output_path = output_custom or os.path.join(OUTPUT_DIR, f"{safe_topic}_{ts}.mp4")
+
+    build_infotainment_video(
+        scene_video_paths=scene_video_paths,
+        scene_audio_paths=audio_paths,
+        scene_durations=durations,
+        output_path=final_output_path,
+        subtitle_ass_path=sub_ass_path,
+        music_path=final_music_path,
+        music_volume=music_volume,
+    )
+
+    # ── 9. Video Quality & Integrity Validation ─────────────────────────
+    print("\n[ 8/8 ] Validating output MP4 with FFprobe...")
+    report: ValidationReport = validate_mp4_video(final_output_path)
+    if not report.is_valid:
+        print(f"  [Error] Video validation errors: {report.errors}")
+        raise RuntimeError(f"Rendered video failed validation: {report.errors}")
+
+    print(f"        Validated: {report.width}x{report.height} @ {report.fps}fps")
+    print(f"        Video Codec: {report.video_codec} | Audio: {report.audio_codec} ({report.audio_channels}ch)")
+    print(f"        Duration   : {report.duration_seconds}s | Size: {report.file_size_bytes / (1024*1024):.2f} MB")
+
+    # ── 10. Thumbnail & YouTube Metadata ────────────────────────────────
+    thumb_path = os.path.splitext(final_output_path)[0] + "_thumb.jpg"
+    hero_input = scene_video_paths[0] if scene_video_paths else None
+    generate_infotainment_thumbnail(
+        title=script.title,
+        category=chosen_category,
+        output_path=thumb_path,
+        hero_video_or_image=hero_input,
+    )
+
+    meta = generate_infotainment_metadata(script, dossier, selected_track)
+    meta_path = os.path.splitext(final_output_path)[0] + "_metadata.json"
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+    print(f"  [Metadata] Saved YouTube metadata -> {meta_path}")
+
+    # ── 11. Optional YouTube Upload ─────────────────────────────────────
+    yt_url, yt_id = None, None
+    upload_status = "local_only"
+
+    if upload or YOUTUBE_UPLOAD_ENABLED or dry_run:
+        print("\n[ Upload ] Processing YouTube upload...")
+        yt_url, yt_id = upload_to_youtube(
+            video_path=final_output_path,
+            title=meta["title"],
+            description=meta["description"],
+            tags=meta["tags"],
+            privacy_status=privacy or YOUTUBE_PRIVACY_STATUS,
+            dry_run=dry_run,
+            force_upload=upload,
+        )
+        if yt_url:
+            upload_status = "uploaded"
+            print(f"        YouTube URL: {yt_url}")
+        else:
+            upload_status = "skipped"
+
+    # ── 12. Record Run History ──────────────────────────────────────────
+    record_infotainment_run(
+        topic=chosen_topic,
+        category=chosen_category,
+        title=script.title,
+        script_summary=script.hook,
+        sources=[{"title": s.title, "url": s.url} for s in dossier.sources],
+        visual_asset_ids=[a.asset_id for a in retrieved_assets],
+        music_track_title=selected_track.title if selected_track else None,
+        output_video_path=final_output_path,
+        video_duration=report.duration_seconds,
+        youtube_video_id=yt_id,
+        upload_status=upload_status,
+    )
+
+    print("\n" + "=" * 65)
+    print("  INFOTAINMENT VIDEO COMPLETE!")
+    print(f"  Video     : {final_output_path}")
+    print(f"  Thumbnail : {thumb_path}")
+    print(f"  Metadata  : {meta_path}")
+    print(f"  Duration  : {report.duration_seconds:.1f}s")
+    if yt_url:
+        print(f"  YouTube   : {yt_url}")
+    print("=" * 65 + "\n")
+
     return {
-        "title": topic.title(),
-        "theme": topic,
-        "scenes": selected[:num_scenes],
+        "video_path": final_output_path,
+        "thumbnail_path": thumb_path,
+        "metadata_path": meta_path,
+        "report": report.to_dict(),
+        "topic": chosen_topic,
+        "category": chosen_category,
+        "youtube_url": yt_url,
     }
 
 
-def _upload_with_retry(platform: str, fn, retries: int = 3, delay: int = 30):
-    """
-    Call *fn* up to *retries* times.  Never raises — returns None on total failure.
-    Waits *delay* seconds between attempts.
-    """
-    for attempt in range(1, retries + 1):
-        try:
-            result = fn()
-            return result
-        except Exception as e:
-            print(f"  {platform} attempt {attempt}/{retries} failed: {e}")
-            if attempt < retries:
-                print(f"  Retrying in {delay}s...")
-                time.sleep(delay)
-            else:
-                print(f"  {platform}: all {retries} attempts failed — continuing without this upload.")
-                traceback.print_exc()
-    return None
+def main():
+    parser = argparse.ArgumentParser(description="Infotainment Video Automation System")
+    parser.add_argument("topic", nargs="*", default=None, help="Specific topic (leave empty for auto)")
+    parser.add_argument("--category", choices=get_categories(), default=None, help="Infotainment category")
+    parser.add_argument("--scenes", type=int, default=4, help="Number of scenes (default: 4)")
+    parser.add_argument("--duration", type=float, default=45.0, help="Target duration in seconds")
+    parser.add_argument("--voice", default=None, help="Deepgram Aura voice (default: aura-asteria-en)")
+    parser.add_argument("--music", default=None, help="Path to custom music audio file")
+    parser.add_argument("--no-music", action="store_true", help="Render video with voiceover only and no music")
+    parser.add_argument("--music-volume", type=float, default=0.16, help="Background music mix volume (0.05 - 0.40)")
+    parser.add_argument("--dry-run", action="store_true", help="Simulate upload and external actions without quota use")
+    parser.add_argument("--upload", action="store_true", help="Explicitly enable YouTube upload (disabled by default)")
+    parser.add_argument("--privacy", choices=["private", "unlisted", "public"], default=None, help="YouTube upload privacy")
+    parser.add_argument("--output", default=None, help="Custom output video path")
 
-
-def run(topic: str = None, num_scenes: int = 4, language: str = "en",
-        music_path: str = None, jamendo_music: bool = False,
-        allow_jamendo_upload: bool = False) -> str:
-    _check_env()
-    _setup_dirs()
-
-    if not topic:
-        topic = _auto_topic()
-
-    lang_name = LANGUAGE_NAMES.get(language, "English")
-
-    print(f"\n{'=' * 55}")
-    print(f"  Peaceful Quotes Video Generator")
-    print(f"  Topic   : {topic}")
-    print(f"  Scenes  : {num_scenes}")
-    print(f"  Language: {lang_name}")
-    print(f"{'=' * 55}\n")
-
-    # ── Step 1 / 3 · Generate quotes & scene descriptions ─────────────
-    print("[ 1/3 ] Generating quotes & peaceful scenes (Groq)...")
-    used_quotes    = get_used_quotes()
-    used_video_ids = get_used_video_ids()
-    used_music_ids = get_used_music_ids()
-    print(f"        History : {len(used_quotes)} quotes, {len(used_video_ids)} videos, {len(used_music_ids)} tracks already used")
-
-    data = None
-    for _attempt in range(3):
-        try:
-            data = generate_quotes(topic, GROQ_API_KEY, num_scenes=num_scenes, language=language,
-                                   used_quotes=used_quotes)
-            break
-        except Exception as e:
-            print(f"  Quote generation attempt {_attempt+1}/3 failed: {e}")
-            time.sleep(5)
-    if data is None:
-        print("  Quote generation failed after 3 attempts — using hardcoded fallback quotes.")
-        data = _fallback_quotes(topic, num_scenes)
-
-    scenes = data["scenes"]
-    title  = data["title"]
-    print(f"        Title  : {title}")
-    print(f"        Scenes : {len(scenes)}")
-
-    try:
-        with open(os.path.join(TEMP_DIR, "quotes.json"), "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception:
-        pass
-
-    print("        Generating video metadata (title / description / hashtags)...")
-    yt_title = hashtags = yt_desc = ""
-    yt_tags = []
-    try:
-        meta     = generate_video_metadata(topic, title, scenes, GROQ_API_KEY, language=language)
-        yt_title = meta["yt_title"]
-        yt_desc  = meta["description"]
-        yt_tags  = meta["tags"]
-        hashtags = " ".join(meta["hashtags"])
-        print(f"        YT Title: {yt_title}")
-    except Exception as e:
-        print(f"  Metadata generation failed ({e}) — using title as fallback.")
-        yt_title = title[:90]
-        yt_desc  = topic
-        yt_tags  = ["shorts", "quotes", "motivational quotes", "daily motivation",
-                    "inspirational quotes", "morning motivation", "life quotes",
-                    "mindfulness", "inner peace", "self improvement",
-                    "mental health", "positive mindset", "motivational shorts"]
-        hashtags = "#shorts #quotes #motivation #mindfulness #innerpeace"
-
-    # ── Step 2 / 3 · Fetch real nature footage from Pexels ───────────
-    print("\n[ 2/3 ] Fetching real nature footage (Pexels) and Voiceover...")
-    video_paths = []
-    audio_paths = []
-    scene_durations = []
-    this_run_video_ids = {}  # dict: scene_idx -> vid_id (safe for re-downloads)
-    for i, scene in enumerate(scenes):
-        print(f"        Scene {i + 1}/{len(scenes)}...")
-        
-        # 1. Generate Voiceover Audio
-        text_to_speak = scene.get("quote", scene.get("narration", ""))
-        audio_out = os.path.join(TEMP_DIR, f"audio_{i + 1:02d}.mp3")
-        try:
-            # Alternate between the two best Deepgram Aura voices for each scene
-            voice_choice = "aura-orion-en" if i % 2 == 0 else "aura-asteria-en"
-            
-            generate_audio(text_to_speak, audio_out, voice=voice_choice, lang=language)
-                
-            audio_paths.append(audio_out)
-            # Make the scene 0.8s longer than the spoken audio for visual breathing room
-            duration = get_audio_duration(audio_out) + 0.8
-            scene_durations.append(duration)
-        except Exception as e:
-            print(f"        Scene {i+1} audio generation failed: {e}")
-            audio_paths.append(None)
-            scene_durations.append(SCENE_DURATION)
-
-        # 2. Fetch Video Footage
-        scene_video_paths = []
-        searches = scene.get("video_searches", [scene.get("video_search", "dark cinematic nature")])
-        if isinstance(searches, str):
-            searches = [searches]
-            
-        for sub_i, search in enumerate(searches[:3]):
-            vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}_sub_{sub_i+1:02d}.mp4")
-            fetched_path = vid_path
-            vid_id = 0
-            for _attempt in range(3):
-                try:
-                    fetched_path, vid_id = fetch_nature_video(
-                        search, PEXELS_API_KEY, vid_path,
-                        used_ids=used_video_ids | set(this_run_video_ids.values()),
-                    )
-                    break
-                except Exception as e:
-                    print(f"        Scene {i+1} fetch attempt {_attempt+1}/3 failed: {e}")
-                    time.sleep(5)
-            scene_video_paths.append(fetched_path)
-            if vid_id:
-                this_run_video_ids[f"{i}_{sub_i}"] = vid_id
-                used_video_ids.add(vid_id)
-                
-        video_paths.append(scene_video_paths)
-        print(f"        Scene {i + 1} done (fetched {len(scene_video_paths)} clips)")
-
-    # ── Step 3 / 3 · Fetch music, copyright-check, then build video ──────
-    total_duration = sum(scene_durations) if scene_durations else SCENE_DURATION * len(scenes)
-
-    user_provided_music = music_path is not None  # remember before the path may be overwritten
-
-    # ── Copyright check: videos ───────────────────────────────────────
-    print("\n[ Copyright ] Verifying downloaded video clips...")
-    try:
-        vid_ok, bad_indices = check_videos(video_paths)
-        if not vid_ok:
-            for i in bad_indices:
-                scene  = scenes[i]
-                search = scene.get("video_search", scene.get("location", "peaceful nature"))
-                print(f"  Re-downloading scene {i+1} ({search!r})...")
-                vid_path = os.path.join(TEMP_DIR, f"scene_{i + 1:02d}.mp4")
-                try:
-                    new_path, vid_id = fetch_nature_video(
-                        search, PEXELS_API_KEY, vid_path,
-                        used_ids=used_video_ids,
-                    )
-                    video_paths[i] = new_path
-                    if vid_id:
-                        this_run_video_ids[i] = vid_id
-                        used_video_ids.add(vid_id)
-                except Exception as e:
-                    print(f"  Scene {i+1} re-download failed ({e}) — using original file anyway.")
-    except Exception as e:
-        print(f"  [Copyright] Video check failed ({e}) — continuing with existing files.")
-
-    # ── Fetch + copyright-check music (retry up to 3 times) ─────────
-    music_track = music_artist = music_license = music_id = ""
-    if not music_path:
-        print("\n[ 3/3 ] Fetching trending music...")
-        music_out  = os.path.join(TEMP_DIR, "music")
-        # IDs to skip — grows each attempt so we never re-try a rejected track
-        skip_music = set(used_music_ids)
-        music_info = {}
-
-        for attempt in range(1, 4):
-            music_info = fetch_trending_music(
-                topic, JAMENDO_CLIENT_ID, total_duration, music_out,
-                used_ids=skip_music,
-                pixabay_api_key=PIXABAY_API_KEY,
-            )
-            # ── Copyright check: music ────────────────────────────────
-            ok, reason = check_music(music_info)
-            if ok:
-                break
-            # Rejected — add this track ID to the skip set and retry
-            bad_id = music_info.get("track_id", "")
-            if bad_id:
-                skip_music.add(bad_id)
-            print(f"  [Copyright] Attempt {attempt}/3 failed ({reason}) — fetching another track...")
-            # Remove bad file from disk
-            bad_path = music_info.get("path", "")
-            if bad_path and os.path.exists(bad_path):
-                try:
-                    os.unlink(bad_path)
-                except Exception:
-                    pass
-        else:
-            print("  [Copyright] Could not find a compliant track after 3 attempts — using ambient fallback.")
-            from src.ambient_generator import generate_ambient
-            music_info = {
-                "path": generate_ambient(total_duration, os.path.join(TEMP_DIR, "fallback.wav")),
-                "track_name": "", "artist_name": "", "license_url": "", "track_id": "",
-            }
-
-        music_path    = music_info["path"]
-        music_track   = music_info.get("track_name", "")
-        music_artist  = music_info.get("artist_name", "")
-        music_license = music_info.get("license_url", "")
-        music_id      = music_info.get("track_id", "")
-    else:
-        print("\n[ 3/3 ] Building video (user-supplied music)...")
-
-    print("\n        Building video...")
-    safe   = _safe_filename(title)
-    ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output = os.path.join(OUTPUT_DIR, f"{safe}_{ts}.mp4")
-
-    try:
-        build_video(
-            scenes         = scenes,
-            video_paths    = video_paths,
-            output_path    = output,
-            music_path     = music_path,
-            audio_paths    = audio_paths,
-            quote_data     = scenes,
-            scene_duration = scene_durations,
-        )
-    except Exception as e:
-        print(f"  Video build failed ({e}) — retrying without music as fallback...")
-        traceback.print_exc()
-        try:
-            build_video(
-                scenes         = scenes,
-                video_paths    = video_paths,
-                output_path    = output,
-                music_path     = None,
-                audio_paths    = audio_paths,
-                quote_data     = scenes,
-                scene_duration = scene_durations,
-            )
-            print("  Fallback build (no music) succeeded.")
-        except Exception as e2:
-            print(f"  Fallback build also failed: {e2}")
-            traceback.print_exc()
-            raise RuntimeError("Video build failed on both attempts — cannot upload.") from e2
-
-    _cleanup_temp()
-
-    # ── Record what we used so future runs produce fresh content ─────────
-    try:
-        this_run_quotes = [s.get("quote", "") for s in scenes]
-        record_run(
-            quotes    = this_run_quotes,
-            video_ids = list(this_run_video_ids.values()),
-            music_id  = music_id or None,
-        )
-    except Exception as e:
-        print(f"  [History] Save failed ({e}) — uploads will still proceed.")
-
-    print(f"\n{'=' * 55}")
-    print(f"  Done!")
-    print(f"  Video    -> {output}")
-    print(f"  Duration ~ {total_duration:.0f}s  ({total_duration / 60:.1f} min)")
-    print(f"  Scenes   : {len(scenes)}")
-    print(f"{'=' * 55}\n")
-
-    # ── Optional: Upload to YouTube & Instagram ────────────────────────
-    # Uploads are silently skipped if the required secrets are not set.
-
-    # Warn when a custom music file is provided without any license declaration
-    if user_provided_music and not jamendo_music:
-        print("  [Copyright] Note: custom music file provided without license info.")
-
-    # Build copyright attribution block
-    credits_lines = ["\n---\nCredits & Licenses:"]
-    credits_lines.append("Video footage: Pexels (https://www.pexels.com/license/) — free to use, no attribution required.")
-    if music_track and music_artist:
-        credits_lines.append(f'Music: "{music_track}" by {music_artist} — CC Licensed via Jamendo.')
-        if music_license:
-            credits_lines.append(f"License: {music_license}")
-    credits_block = "\n".join(credits_lines)
-
-    yt_desc_full = f"{yt_desc}\n{credits_block}"
-    caption      = f"{yt_title}\n\n{yt_desc}\n\n{credits_block}\n\n{hashtags}"
-
-    print("[ Upload ] Posting to social media...")
-
-    # ── YouTube upload with retry ──────────────────────────────────────
-    yt_url = _upload_with_retry(
-        "YouTube",
-        lambda: upload_to_youtube(output, title=yt_title, description=yt_desc_full, tags=yt_tags),
-        retries=3,
-        delay=30,
-    )
-
-    # ── Instagram upload with retry ────────────────────────────────────
-    ig_url = _upload_with_retry(
-        "Instagram",
-        lambda: upload_to_instagram(output, caption=caption),
-        retries=3,
-        delay=60,
-    )
-
-    print(f"\n  Published:")
-    print(f"    YouTube  -> {yt_url  or '(not uploaded)'}")
-    print(f"    Instagram-> {ig_url or '(not uploaded)'}")
-
-    return output
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Peaceful Quotes Video Generator")
-    parser.add_argument("topic", nargs="*", help="Quote theme (optional — auto-rotates if omitted)")
-    parser.add_argument("--scenes",  type=int, default=4,   help="Number of scenes (default: 4)")
-    parser.add_argument("--lang",    default="en",
-                        choices=list(LANGUAGE_NAMES.keys()),
-                        help="Language: en, te (Telugu), hi (Hindi), ta (Tamil), ja (Japanese)")
-    parser.add_argument("--music",   default=None,          help="Path to custom background music file")
-    parser.add_argument("--jamendo-music", action="store_true",
-                        help="Mark that --music is from Jamendo (blocks auto-upload unless --allow-jamendo-upload is set)")
-    parser.add_argument("--allow-jamendo-upload", action="store_true",
-                        help="Allow auto-upload when using Jamendo music (only if you have proper rights/license)")
     args = parser.parse_args()
 
-    if args.jamendo_music and not args.music:
-        parser.error("--jamendo-music requires --music <path>")
+    topic_str = " ".join(args.topic).strip() if args.topic else None
 
-    _topic = " ".join(args.topic).strip() if args.topic else None
+    try:
+        run_pipeline(
+            topic=topic_str,
+            category=args.category,
+            num_scenes=args.scenes,
+            target_duration=args.duration,
+            voice=args.voice,
+            music_path=args.music,
+            no_music=args.no_music,
+            music_volume=args.music_volume,
+            dry_run=args.dry_run,
+            upload=args.upload,
+            privacy=args.privacy,
+            output_custom=args.output,
+        )
+    except Exception as e:
+        print(f"\n[FATAL ERROR] Pipeline terminated with exception: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
-    run(
-        _topic,
-        num_scenes=args.scenes,
-        language=args.lang,
-        music_path=args.music,
-        jamendo_music=args.jamendo_music,
-        allow_jamendo_upload=args.allow_jamendo_upload,
-    )
+
+if __name__ == "__main__":
+    main()

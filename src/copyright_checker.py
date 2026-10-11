@@ -1,140 +1,78 @@
 """
-Pre-build copyright verifier.
+Licensing and Asset Integrity Checker Module.
 
-Runs immediately after files are downloaded and BEFORE video rendering starts.
-If a track fails the check, the caller can discard it and fetch a replacement
-without wasting any render time.
+Validates that:
+  - Background music tracks have verified status in the manifest.
+  - Required attributions are formatted properly.
+  - Visual stock footage and images from Pexels / Pixabay exist and are intact.
 
-Checks performed:
-  Music (Jamendo / SoundHelix / etc.):
-    1. License URL present and resolves to a CC-BY, CC-BY-SA, or CC0 license
-       (blocks NC = non-commercial, ND = no-derivatives only)
-       NOTE: SA (share-alike) is allowed — using audio as background in a video
-       is not a derivative work, so SA terms don't restrict the upload.
-    2. Audio file exists on disk and is not empty
-
-  Pexels video clips:
-    1. Each clip file exists on disk and is not empty
-       (Pexels footage is CC0 by terms-of-service — no per-file license check needed)
+Note: Automated checks validate local metadata and file integrity;
+they do not represent legal warranties of copyright clearance.
 """
 
+from __future__ import annotations
+
 import os
-import requests
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
+from src.media_fetcher import RetrievedAsset
+from src.music_manager import MusicTrack
 
 
-# Licenses we accept for commercial/upload use on YouTube + Instagram
-_ALLOWED_CC = (
-    "creativecommons.org/licenses/by/",       # CC BY
-    "creativecommons.org/licenses/by-sa/",    # CC BY-SA (allowed — SA doesn't restrict uploaders)
-    "creativecommons.org/publicdomain/zero/", # CC0
-    "soundhelix.com",                         # SoundHelix CC-BY-SA guaranteed fallback
-    "pixabay.com/service/terms",              # Pixabay CC0
-)
-
-# License fragments that block commercial / derivative use
-# NOTE: -sa removed — share-alike does NOT prevent YouTube/Instagram uploads
-_BLOCKED_FRAGMENTS = ("-nc", "-nd")
+@dataclass
+class LicenseCheckResult:
+    is_compliant: bool
+    requires_attribution: bool
+    attribution_text: str
+    reasons: List[str]
 
 
-def _license_ok(license_url: str) -> tuple[bool, str]:
+def check_music_track_licensing(track: Optional[MusicTrack]) -> LicenseCheckResult:
     """
-    Return (True, "") if license_url is CC-BY or CC0.
-    Return (False, reason) otherwise.
+    Validate licensing terms and file status for selected music track.
+    If no track is provided (no-music mode), returns compliant.
     """
-    if not license_url:
-        return False, "no license URL provided"
+    if track is None:
+        return LicenseCheckResult(
+            is_compliant=True,
+            requires_attribution=False,
+            attribution_text="",
+            reasons=["No music track selected; speech-only delivery is compliant."],
+        )
 
-    url_lower = license_url.lower()
-    for blocked in _BLOCKED_FRAGMENTS:
-        if blocked in url_lower:
-            return False, f"license contains '{blocked}' — not allowed for commercial upload"
+    reasons: List[str] = []
 
-    for allowed in _ALLOWED_CC:
-        if allowed in url_lower:
-            return True, ""
+    if not track.verified:
+        reasons.append(f"Track '{track.title}' is not marked as verified in the music manifest.")
 
-    # License URL present but unknown — do a quick HTTP check to confirm it's real
-    try:
-        r = requests.head(license_url, timeout=8, allow_redirects=True)
-        final_url = r.url.lower()
-        for blocked in _BLOCKED_FRAGMENTS:
-            if blocked in final_url:
-                return False, f"resolved license URL contains '{blocked}'"
-        for allowed in _ALLOWED_CC:
-            if allowed in final_url:
-                return True, ""
-        return False, f"license URL resolved to unrecognised license: {r.url}"
-    except Exception as e:
-        return False, f"could not verify license URL ({e})"
+    if not track.resolved_path or not os.path.exists(track.resolved_path):
+        reasons.append(f"Track audio file missing on disk: {track.resolved_path}")
+    elif os.path.getsize(track.resolved_path) < 2000:
+        reasons.append(f"Track audio file is empty or corrupted: {track.resolved_path}")
+
+    if track.attribution_required and not track.attribution_text:
+        reasons.append(f"Track '{track.title}' requires attribution but attribution_text is blank.")
+
+    is_compliant = len(reasons) == 0
+    return LicenseCheckResult(
+        is_compliant=is_compliant,
+        requires_attribution=track.attribution_required,
+        attribution_text=track.attribution_text if track.attribution_required else "",
+        reasons=reasons,
+    )
 
 
-def check_music(music_info: dict) -> tuple[bool, str]:
+def check_visual_assets_integrity(assets: List[RetrievedAsset]) -> Tuple[bool, List[str]]:
     """
-    Verify downloaded music is safe to upload.
-
-    Args:
-        music_info: dict returned by fetch_trending_music()
-
-    Returns:
-        (True, "")            — all checks passed
-        (False, reason_str)   — failed, reason explains why
+    Validate that all scene visual assets exist on disk and meet minimum file sizes.
+    Returns (all_ok, failed_descriptions).
     """
-    path = music_info.get("path", "")
-    license_url = music_info.get("license_url", "")
-    track_name = music_info.get("track_name", "")
-    track_id = music_info.get("track_id", "")
+    failed: List[str] = []
+    for idx, asset in enumerate(assets, start=1):
+        if not asset.path or not os.path.exists(asset.path):
+            failed.append(f"Scene {idx}: missing media file ({asset.path})")
+        elif os.path.getsize(asset.path) < 5000:
+            failed.append(f"Scene {idx}: media file too small ({asset.path})")
 
-    print(f"\n  [Copyright] Checking music: '{track_name}' (id={track_id})")
-
-    # 1. File exists and non-empty
-    if not path or not os.path.exists(path):
-        return False, "audio file not found on disk"
-    if os.path.getsize(path) < 1000:
-        return False, "audio file is empty or too small"
-
-    # 2. No license URL — if it's a named track, reject; otherwise skip check
-    if not license_url:
-        if track_name:
-            return False, "no license URL for a named track"
-        print("  [Copyright] No license URL and no track name — skipping check.")
-        return True, ""
-
-    # 3. License URL check
-    ok, reason = _license_ok(license_url)
-    if ok:
-        print(f"  [Copyright] Music OK — {license_url}")
-    else:
-        print(f"  [Copyright] Music REJECTED — {reason}")
-    return ok, reason
-
-
-def check_videos(video_paths: list) -> tuple[bool, list[int]]:
-    """
-    Verify all downloaded Pexels clips exist and are non-empty.
-    Handles both flat lists [path1, path2] and nested lists [[path1a, path1b], [path2]].
-    Pexels is CC0 by ToS so no per-file license check is needed.
-
-    Returns:
-        (True, [])               — all clips OK
-        (False, [idx, ...])      — list of 0-based indices that failed
-    """
-    failed = []
-    for i, scene_paths in enumerate(video_paths):
-        if isinstance(scene_paths, str):
-            scene_paths = [scene_paths]
-            
-        scene_ok = True
-        for path in scene_paths:
-            if not path or not os.path.exists(path):
-                print(f"  [Copyright] Video scene {i+1}: FILE MISSING — {path}")
-                scene_ok = False
-            elif os.path.getsize(path) < 10_000:
-                print(f"  [Copyright] Video scene {i+1}: file too small (corrupted?) — {path}")
-                scene_ok = False
-        
-        if not scene_ok:
-            failed.append(i)
-            
-    if not failed:
-        print(f"  [Copyright] All {len(video_paths)} scenes have OK video clips (Pexels CC0).")
-    return (len(failed) == 0), failed
+    return len(failed) == 0, failed
