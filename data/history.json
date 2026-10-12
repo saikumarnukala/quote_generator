@@ -893,6 +893,32 @@
       "video_duration": 35.27,
       "youtube_video_id": "RMJS5dnvY1w",
       "upload_status": "uploaded"
+    },
+    {
+      "run_id": "run_1791841357",
+      "timestamp": "2026-10-12T21:42:37Z",
+      "topic": "Why Point Nemo Is the Most Isolated Spot on Earth",
+      "normalized_topic": "why point nemo is the most isolated spot on earth",
+      "category": "geography",
+      "title": "The Shocking Truth About Why Point Nemo Is the Most Isolated Spot on Earth",
+      "script_summary": "Have you ever wondered what makes Why Point Nemo Is the Most Isolated Spot on Earth so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: Why Point Nemo Is the Most Isolated Spot on Earth",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=Why%20Point%20Nemo%20Is%20the%20Most%20Isolated%20Spot%20on%20Earth"
+        }
+      ],
+      "visual_asset_ids": [
+        "38675833",
+        "33994569",
+        "34632830",
+        "34342666"
+      ],
+      "music_track": "none",
+      "output_video": "Why_Point_Nemo_Is_the_Most_Isolated_Spot_on_Earth_20261012_214124.mp4",
+      "video_duration": 37.43,
+      "youtube_video_id": "mPuBtGWypJY",
+      "upload_status": "uploaded"
     }
   ],
   "topics": [
@@ -901,41 +927,47 @@
     "The Science Behind Bioluminescent Creatures in Deep Oceans",
     "How the Antikythera Mechanism Predicted Eclipses 2000 Years Ago",
     "Why Can't Light Escape a Black Hole?",
-    "The Hidden Subglacial Lakes Trapped Beneath Antarctica"
+    "The Hidden Subglacial Lakes Trapped Beneath Antarctica",
+    "Why Point Nemo Is the Most Isolated Spot on Earth"
   ],
   "normalized_topics": [
-    "how the james webb space telescope sees the early universe",
+    "why point nemo is the most isolated spot on earth",
+    "why can t light escape a black hole",
     "the science behind bioluminescent creatures in deep oceans",
-    "how the antikythera mechanism predicted eclipses 2000 years ago",
     "why does ice float on water",
     "the hidden subglacial lakes trapped beneath antarctica",
-    "why can t light escape a black hole"
+    "how the james webb space telescope sees the early universe",
+    "how the antikythera mechanism predicted eclipses 2000 years ago"
   ],
   "asset_ids": [
-    "7687805",
-    "30450505",
-    "36453231",
-    "31314196",
-    "14618955",
+    "34632830",
     "7688618",
-    "7041146",
-    "8721929",
+    "26732070",
+    "38675833",
+    "39149890",
     "35611371",
     "31004692",
-    "34729856",
+    "33994569",
+    "14618955",
     "28156100",
     "39859850",
-    "36298433",
-    "10239476",
+    "7687805",
+    "30450505",
     "39872367",
-    "26732070",
-    "39149890",
-    "25935025"
+    "34342666",
+    "25935025",
+    "8721929",
+    "7041146",
+    "10239476",
+    "36298433",
+    "31314196",
+    "36453231",
+    "34729856"
   ],
   "music_tracks": [
-    "Stellar Drift",
+    "none",
     "Cinematic Pulse",
-    "Ancient Echoes",
-    "none"
+    "Stellar Drift",
+    "Ancient Echoes"
   ]
 }
