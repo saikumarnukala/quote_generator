@@ -945,6 +945,32 @@
       "video_duration": 36.3,
       "youtube_video_id": "YHtGMddEfHM",
       "upload_status": "uploaded"
+    },
+    {
+      "run_id": "run_1792000639",
+      "timestamp": "2026-10-14T17:57:19Z",
+      "topic": "The Immortal Jellyfish That Can Reset Its Biological Clock",
+      "normalized_topic": "the immortal jellyfish that can reset its biological clock",
+      "category": "interesting_facts",
+      "title": "The Shocking Truth About The Immortal Jellyfish That Can Reset Its Biological Cl",
+      "script_summary": "Have you ever wondered what makes The Immortal Jellyfish That Can Reset Its Biological Clock so extraordinary? Let's break down the facts.",
+      "sources": [
+        {
+          "title": "General Reference: The Immortal Jellyfish That Can Reset Its Biological Clock",
+          "url": "https://en.wikipedia.org/wiki/Special:Search?search=The%20Immortal%20Jellyfish%20That%20Can%20Reset%20Its%20Biological%20Clock"
+        }
+      ],
+      "visual_asset_ids": [
+        "16482908",
+        "28635600",
+        "34913285",
+        "7986013"
+      ],
+      "music_track": "none",
+      "output_video": "The_Immortal_Jellyfish_That_Can_Reset_Its_Biologic_20261014_175611.mp4",
+      "video_duration": 37.5,
+      "youtube_video_id": "HgUHFAmERDY",
+      "upload_status": "uploaded"
     }
   ],
   "topics": [
@@ -955,51 +981,57 @@
     "Why Can't Light Escape a Black Hole?",
     "The Hidden Subglacial Lakes Trapped Beneath Antarctica",
     "Why Point Nemo Is the Most Isolated Spot on Earth",
-    "How Burj Khalifa Withstands Extreme Desert Winds"
+    "How Burj Khalifa Withstands Extreme Desert Winds",
+    "The Immortal Jellyfish That Can Reset Its Biological Clock"
   ],
   "normalized_topics": [
-    "why point nemo is the most isolated spot on earth",
-    "how burj khalifa withstands extreme desert winds",
-    "the hidden subglacial lakes trapped beneath antarctica",
     "how the james webb space telescope sees the early universe",
-    "the science behind bioluminescent creatures in deep oceans",
-    "how the antikythera mechanism predicted eclipses 2000 years ago",
+    "the hidden subglacial lakes trapped beneath antarctica",
     "why does ice float on water",
-    "why can t light escape a black hole"
+    "the science behind bioluminescent creatures in deep oceans",
+    "how burj khalifa withstands extreme desert winds",
+    "how the antikythera mechanism predicted eclipses 2000 years ago",
+    "the immortal jellyfish that can reset its biological clock",
+    "why can t light escape a black hole",
+    "why point nemo is the most isolated spot on earth"
   ],
   "asset_ids": [
-    "30450505",
-    "28156100",
-    "30944955",
-    "31004692",
-    "37337937",
-    "39859850",
-    "7687805",
     "31314196",
     "7688618",
-    "14618955",
+    "38675833",
+    "30450505",
     "33994569",
+    "30944955",
+    "31004692",
+    "31257755",
+    "28156100",
+    "34632830",
+    "37337937",
+    "35611371",
+    "14618955",
+    "36298433",
+    "39872367",
+    "39149890",
+    "26732070",
+    "8721929",
+    "39859850",
+    "7687805",
     "36453231",
-    "10239476",
-    "34342666",
-    "36432574",
     "34729856",
     "7041146",
     "25935025",
-    "39149890",
-    "39872367",
-    "26732070",
-    "34632830",
-    "31257755",
-    "35611371",
-    "36298433",
-    "38675833",
-    "8721929"
+    "34342666",
+    "10239476",
+    "34913285",
+    "16482908",
+    "7986013",
+    "36432574",
+    "28635600"
   ],
   "music_tracks": [
     "Cinematic Pulse",
-    "Ancient Echoes",
+    "none",
     "Stellar Drift",
-    "none"
+    "Ancient Echoes"
   ]
 }
