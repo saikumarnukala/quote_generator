@@ -119,7 +119,7 @@ def research_topic(topic: str, category: str = "science", timeout: int = 10) -> 
     if not summary_data and wiki_title != topic:
         summary_data = fetch_wikipedia_summary(topic, timeout=timeout)
 
-    if summary_data and summary_data.get("extract"):
+    if summary_data and summary_data.get("type") != "disambiguation" and summary_data.get("extract", "").strip():
         canonical_title = summary_data.get("title", wiki_title)
         page_url = (
             summary_data.get("content_urls", {}).get("desktop", {}).get("page")
@@ -147,8 +147,7 @@ def research_topic(topic: str, category: str = "science", timeout: int = 10) -> 
 
     # Safe fallback if Wikipedia API is unreachable or topic has no exact match
     fallback_summary = (
-        f"Verified educational overview of {topic} in the field of {category}. "
-        "Claims are grounded in established scientific and historical principles."
+        f"No usable source article was retrieved for {topic}."
     )
     fallback_citation = SourceCitation(
         title=f"General Reference: {topic}",
@@ -163,6 +162,6 @@ def research_topic(topic: str, category: str = "science", timeout: int = 10) -> 
         primary_source_title=topic,
         primary_source_url=fallback_citation.url,
         summary=fallback_summary,
-        key_facts=[fallback_summary],
+        key_facts=[],
         sources=[fallback_citation],
     )

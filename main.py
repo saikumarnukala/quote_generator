@@ -124,7 +124,7 @@ def run_pipeline(
     dossier: ResearchDossier = research_topic(chosen_topic, category=chosen_category)
     print(f"        Primary Source : {dossier.primary_source_title}")
     print(f"        Source URL     : {dossier.primary_source_url}")
-    print(f"        Extracted Facts: {len(dossier.key_facts)} verified claims")
+    print(f"        Extracted Facts: {len(dossier.key_facts)} claims extracted from the article")
 
     # ── 3. Script Generation & Schema Validation ────────────────────────
     print("\n[ 2/8 ] Generating and validating structured infotainment script...")

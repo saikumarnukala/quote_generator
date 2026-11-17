@@ -70,6 +70,11 @@ class TestScriptGenerator(unittest.TestCase):
         self.assertTrue(script.hook)
         self.assertGreater(script.target_duration, 15.0)
 
+    def test_search_link_is_insufficient_for_generation(self):
+        self.dossier.sources[0].verified = False
+        with self.assertRaisesRegex(ValueError, "No source article"):
+            generate_infotainment_script(self.dossier.topic, "science", self.dossier, "")
+
     @patch("src.script_generator.Groq")
     def test_generate_script_mocked_groq(self, mock_groq_class):
         mock_client = MagicMock()

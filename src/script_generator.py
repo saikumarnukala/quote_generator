@@ -82,13 +82,16 @@ def validate_script_dict(data: Dict[str, Any]) -> bool:
     if not isinstance(scenes, list) or len(scenes) < 3:
         return False
 
-    for i, sc in enumerate(scenes):
+    narration_seen = set()
+    for sc in scenes:
         if not isinstance(sc, dict):
             return False
         if not sc.get("narration") or not isinstance(sc.get("narration"), str):
             return False
-        if not sc["narration"].strip():
+        narration = " ".join(sc["narration"].casefold().split())
+        if not narration or narration in narration_seen:
             return False
+        narration_seen.add(narration)
         # Must have at least one search query
         v_queries = sc.get("video_search_queries") or []
         img_queries = sc.get("image_search_queries") or []
@@ -177,15 +180,16 @@ def build_fallback_script(
     Construct a verified, factual infotainment script directly from ResearchDossier.
     Used when Groq API is offline, credentials are not set, or rate limits occur.
     """
-    facts = dossier.key_facts or [dossier.summary]
-    if len(facts) < num_scenes:
-        # Split summary into sentences if facts list is short
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", dossier.summary) if len(s.strip()) > 20]
-        facts = (facts + sentences + [f"This reveals the incredible reality of {topic}."])[:num_scenes]
+    sentences = re.split(r"(?<=[.!?])\s+", dossier.summary)
+    facts = list(dict.fromkeys(
+        text.strip() for text in (*sentences, *dossier.key_facts) if text.strip()
+    ))
+    if len(facts) < num_scenes - 1:
+        raise ValueError(f"Too little source material for a factual Short about {topic!r}.")
 
     scenes: List[SceneData] = []
     # Scene 1: Hook
-    hook_text = f"Have you ever wondered what makes {topic} so extraordinary? Let's break down the facts."
+    hook_text = facts[0]
     scenes.append(
         SceneData(
             scene_number=1,
@@ -195,15 +199,14 @@ def build_fallback_script(
             visual_type="video",
             video_search_queries=[f"{topic} cinematic", f"{category} technology aerial"],
             image_search_queries=[f"{topic} discovery", f"{category} scientific"],
-            onscreen_text=f"THE TRUTH ABOUT {topic.upper()[:25]}",
+            onscreen_text=dossier.primary_source_title[:34],
             source_refs=[dossier.primary_source_title],
         )
     )
 
     # Core scenes from facts
     for idx in range(1, num_scenes - 1):
-        fact = facts[min(idx - 1, len(facts) - 1)]
-        scene_narr = f"First discovered through rigorous research: {fact}" if idx == 1 else f"Furthermore: {fact}"
+        scene_narr = facts[idx]
         scenes.append(
             SceneData(
                 scene_number=idx + 1,
@@ -219,10 +222,7 @@ def build_fallback_script(
         )
 
     # Final scene: Conclusion / Takeaway
-    final_narr = (
-        f"Understanding {topic} changes how we see {category}. "
-        "Science continues to uncover new secrets every day."
-    )
+    final_narr = f"For more about this subject, see the article on {dossier.primary_source_title} linked in the description."
     scenes.append(
         SceneData(
             scene_number=num_scenes,
@@ -232,12 +232,12 @@ def build_fallback_script(
             visual_type="video",
             video_search_queries=[f"{category} future tech cinematic", "earth space horizon 4k"],
             image_search_queries=[f"{topic} modern", f"{category} innovation"],
-            onscreen_text="THE TAKEAWAY",
+            onscreen_text="SOURCE IN DESCRIPTION",
             source_refs=[dossier.primary_source_title],
         )
     )
 
-    title = f"The Shocking Truth About {topic}"[:80]
+    title = topic[:80]
     return InfotainmentScript(
         title=title,
         category=category,
@@ -260,6 +260,9 @@ def generate_infotainment_script(
     Generate an engaging, factual infotainment video script using Groq.
     Validates output structure and falls back to researched factual script on failure.
     """
+    if not dossier.summary.strip() or not any(source.verified for source in dossier.sources):
+        raise ValueError(f"No source article available for {topic!r}; retry with a specific article title.")
+
     if not groq_api_key or not groq_api_key.startswith("gsk_"):
         print("  [Script] Valid GROQ_API_KEY not configured — using research-grounded fallback generator.")
         return build_fallback_script(topic, category, dossier, num_scenes=num_scenes)
